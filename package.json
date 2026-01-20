@@ -15,7 +15,7 @@
     "@capacitor/app": "^5.0.0",
     "@capacitor/device": "^5.0.0",
     "@capacitor/local-notifications": "^5.0.0",
-    "@capawesome-team/capacitor-foreground-service": "^5.0.0"
+    "@capawesome-team/capacitor-android-foreground-service": "^5.0.0"
   },
   "devDependencies": {
     "@capacitor/cli": "^5.0.0"

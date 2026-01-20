@@ -59,9 +59,9 @@ async function startForegroundService() {
                 }
             }
 
-            const { ForegroundService } = Capacitor.Plugins;
-            if (ForegroundService) {
-                await ForegroundService.start({
+            const { AndroidForegroundService } = Capacitor.Plugins;
+            if (AndroidForegroundService) {
+                await AndroidForegroundService.start({
                     id: 12345,
                     title: 'AudioPorter Active',
                     body: 'Streaming high-quality audio...',
@@ -80,9 +80,9 @@ async function startForegroundService() {
 async function stopForegroundService() {
     if (window.Capacitor && window.Capacitor.isNativePlatform() && state.isForegroundServiceActive) {
         try {
-            const { ForegroundService } = Capacitor.Plugins;
-            if (ForegroundService) {
-                await ForegroundService.stop();
+            const { AndroidForegroundService } = Capacitor.Plugins;
+            if (AndroidForegroundService) {
+                await AndroidForegroundService.stop();
                 state.isForegroundServiceActive = false;
                 console.log("Foreground service stopped");
             }
