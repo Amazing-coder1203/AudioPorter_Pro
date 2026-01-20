@@ -15,6 +15,9 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3659/3659899.png">
+    <!-- QR Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
 </head>
 
 <body>
@@ -61,6 +64,11 @@
                     <span class="label">Pairing Code</span>
                     <div id="pc-code" class="code-display">----</div>
                     <p class="hint">Enter this code on your phone</p>
+
+                    <div class="qr-pairing">
+                        <p class="label">Or Scan to Link</p>
+                        <div id="qrcode" class="qrcode-box"></div>
+                    </div>
                 </div>
 
                 <div class="status-box">
@@ -102,7 +110,11 @@
 
                 <div class="controls">
                     <button id="connect-phone" class="primary-btn">Connect & Listen</button>
+                    <button id="scan-qr" class="outline-btn" style="margin-top: 1rem;">Scan QR Code</button>
                 </div>
+
+                <div id="qr-reader"
+                    style="width: 100%; display: none; margin-top: 1rem; border-radius: 12px; overflow: hidden;"></div>
             </div>
         </section>
 

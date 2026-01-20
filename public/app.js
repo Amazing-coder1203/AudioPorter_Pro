@@ -12,6 +12,8 @@ const state = {
     audioCtx: null,
     gainNode: null,
     heartbeatInterval: null,
+    scanner: null,
+    serverIP: null,
 };
 
 // UI Elements
@@ -36,16 +38,33 @@ const audioSourceSelect = document.getElementById('audio-source');
 const volumeSlider = document.getElementById('volume-slider');
 const volumeContainer = document.querySelector('.volume-container');
 
+// Replace this with your actual Render/Heroku URL when you publish
+const DEFAULT_PRODUCTION_SERVER = 'audioporter-pro.onrender.com';
+
 // Initialize WebSocket
-function initSocket() {
-    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+function initSocket(customUrl) {
+    // Determine the target URL
+    let socketUrl;
 
-    // NOTE: When deploying, replace 'window.location.host' with your actual backend URL
-    // e.g., 'audioporter-backend.onrender.com'
-    let socketUrl = `${protocol}//${window.location.host}`;
+    if (customUrl) {
+        socketUrl = customUrl;
+    } else {
+        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 
+        // If we're on a real website, use the current host. If in APK, use production server.
+        if (window.location.protocol === 'file:') {
+            socketUrl = `wss://${DEFAULT_PRODUCTION_SERVER}`;
+        } else {
+            socketUrl = `${protocol}//${window.location.host}`;
+        }
+    }
+
+    console.log("Connecting to:", socketUrl);
     state.socket = new WebSocket(socketUrl);
+
+    // Attach events to the current socket
+    initSocketEvents();
 
     state.socket.onopen = () => {
         console.log('Server connection established');
@@ -63,6 +82,13 @@ function initSocket() {
                 break;
             case 'signal':
                 handleSignal(data.data);
+                break;
+            case 'server_info':
+                state.serverIP = data.ip;
+                // If we are on PC and have a room code, generate QR
+                if (state.role === 'pc' && state.roomCode) {
+                    generatePairingQR();
+                }
                 break;
             case 'partner_disconnected':
                 handlePartnerLeft();
@@ -143,8 +169,22 @@ async function setupPC() {
     // Request permission early to get device labels, then populate list
     initDeviceList();
 
-    if (!state.socket) initSocket();
+    if (!state.socket || state.socket.readyState !== WebSocket.OPEN) initSocket();
     else joinRoom();
+}
+
+function generatePairingQR() {
+    if (!state.serverIP || !state.roomCode) return;
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const pairingData = `aplink:${state.roomCode}@${protocol}//${state.serverIP}:${window.location.port || 3000}`;
+
+    const typeNumber = 0;
+    const errorCorrectionLevel = 'L';
+    const qr = qrcode(typeNumber, errorCorrectionLevel);
+    qr.addData(pairingData);
+    qr.make();
+    document.getElementById('qrcode').innerHTML = qr.createImgTag(5);
 }
 
 async function initDeviceList() {
@@ -261,7 +301,10 @@ async function changeSource() {
 function setupPhone() {
     state.role = 'phone';
     showScreen('phone');
-    if (!state.socket) initSocket();
+    // In APK, immediately try to connect to the default production server if not already connected
+    if (!state.socket || state.socket.readyState !== WebSocket.OPEN) {
+        initSocket();
+    }
 }
 
 function getEnteredCode() {
@@ -275,8 +318,71 @@ function connectPhone() {
     if (code.length !== 4) return;
 
     state.roomCode = code;
-    joinRoom();
+
+    // Ensure we have a socket before joining
+    if (!state.socket || state.socket.readyState !== WebSocket.OPEN) {
+        initSocket();
+        state.socket.onopen = () => joinRoom();
+    } else {
+        joinRoom();
+    }
     updateStatus('Connecting to room...', 'waiting');
+}
+
+function startScanner() {
+    const reader = document.getElementById('qr-reader');
+    reader.style.display = 'block';
+
+    state.scanner = new Html5Qrcode("qr-reader");
+    const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+
+    state.scanner.start({ facingMode: "environment" }, config, (decodedText) => {
+        if (decodedText.startsWith('aplink:')) {
+            // Format: aplink:CODE@ws://IP:PORT
+            const [code, serverUrl] = decodedText.replace('aplink:', '').split('@');
+
+            state.roomCode = code;
+
+            // Re-initialize socket with the scanned IP
+            if (state.socket) state.socket.close();
+            initSocket(serverUrl);
+
+            // Wait for open to join
+            state.socket.onopen = () => {
+                joinRoom();
+                updateStatus('Connected via QR', 'ready');
+            };
+
+            stopScanner();
+        }
+    });
+}
+
+function stopScanner() {
+    if (state.scanner) {
+        state.scanner.stop().then(() => {
+            document.getElementById('qr-reader').style.display = 'none';
+        });
+    }
+}
+
+function initSocketEvents() {
+    state.socket.onmessage = async (event) => {
+        const data = JSON.parse(event.data);
+        switch (data.type) {
+            case 'ready': handlePartnerJoined(); break;
+            case 'signal': handleSignal(data.data); break;
+            case 'server_info': state.serverIP = data.ip; break;
+            case 'partner_disconnected': handlePartnerLeft(); break;
+            case 'error': alert(data.message); updateStatus(data.message, 'error'); break;
+        }
+    };
+
+    state.socket.onclose = () => {
+        updateStatus('Disconnected', 'error');
+        stopHeartbeat();
+        setTimeout(initSocket, 3000);
+    };
 }
 
 // WebRTC Logic
@@ -494,6 +600,7 @@ document.querySelectorAll('.back-btn').forEach(btn => {
 startBtn.addEventListener('click', startCapture);
 changeSourceBtn.addEventListener('click', changeSource);
 connectPhoneBtn.addEventListener('click', connectPhone);
+document.getElementById('scan-qr').addEventListener('click', startScanner);
 
 volumeSlider.addEventListener('input', (e) => {
     const val = parseFloat(e.target.value);

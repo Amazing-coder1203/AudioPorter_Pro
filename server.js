@@ -2,6 +2,7 @@ const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
 const path = require('path');
+const os = require('os');
 
 const app = express();
 const server = http.createServer(app);
@@ -29,8 +30,29 @@ function getPublicIp(req) {
     return isPrivate ? 'local-network' : ip;
 }
 
+function getLocalIP() {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+        for (const iface of interfaces[name]) {
+            if (iface.family === 'IPv4' && !iface.internal) {
+                return iface.address;
+            }
+        }
+    }
+    return 'localhost';
+}
+
+const localIP = getLocalIP();
+
 wss.on('connection', (ws, req) => {
     const publicIp = getPublicIp(req);
+
+    // Immediately send server info to the new connection
+    ws.send(JSON.stringify({
+        type: 'server_info',
+        ip: localIP,
+        port: PORT
+    }));
     let currentRoom = null;
     let currentRole = null;
 
