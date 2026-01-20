@@ -25,15 +25,14 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm install --legacy-peer-deps
+          npm cache clean --force
+          npm install --legacy-peer-deps --no-audit --no-fund @capacitor/cli@5 @capacitor/core@5 @capacitor/android@5 @capacitor/app@5 @capacitor/device@5 @capacitor/local-notifications@5 @capawesome-team/capacitor-foreground-service@5.1.0
 
       - name: Sync Android Project
         run: |
-          # Ensure android platform exists, then sync
-          if [ ! -d "android" ]; then
-            npx cap add android
-          fi
-          npx cap sync android
+          # Use local capacitor binary for reliability
+          node ./node_modules/@capacitor/cli/bin/cap add android || echo "Already exists"
+          node ./node_modules/@capacitor/cli/bin/cap sync android
 
       - name: Force SDK 34 and Permissions
         run: |
