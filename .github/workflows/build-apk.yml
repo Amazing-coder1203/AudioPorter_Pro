@@ -23,48 +23,51 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Debug Environment
+        run: |
+          node -v
+          npm -v
+          ls -R public
+
       - name: Install dependencies
         run: |
-          npm install
-          npm install @capacitor/cli @capacitor/core @capacitor/android @capacitor/app @capacitor/device @capacitor/local-notifications @capawesome-team/capacitor-foreground-service --legacy-peer-deps
+          npm install --legacy-peer-deps
+          npm install @capacitor/cli@5 @capacitor/core@5 @capacitor/android@5 --legacy-peer-deps
 
-      - name: Setup Capacitor
+      - name: Capacitor Sync
         run: |
           npx cap add android || echo "Android platform already exists"
           npx cap sync android
-          npx cap copy android
 
-      - name: Patch Android Project (Background Audio)
+      - name: Patch Android Project
         run: |
-          # 1. SDK Update to 34 (Required for mediaPlayback)
-          VAR_FILE="android/variables.gradle"
-          if [ -f "$VAR_FILE" ]; then
-            sed -i 's/compileSdkVersion = [0-9]*/compileSdkVersion = 34/' "$VAR_FILE"
-            sed -i 's/targetSdkVersion = [0-9]*/targetSdkVersion = 34/' "$VAR_FILE"
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          VARS="android/variables.gradle"
+          
+          if [ -f "$VARS" ]; then
+            sed -i 's/compileSdkVersion = [0-9]*/compileSdkVersion = 34/' "$VARS"
+            sed -i 's/targetSdkVersion = [0-9]*/targetSdkVersion = 34/' "$VARS"
+            echo "SDK 34 applied to $VARS"
           fi
 
-          # 2. Manifest Patch
-          MANIFEST="android/app/src/main/AndroidManifest.xml"
           if [ -f "$MANIFEST" ]; then
-            # Add permissions if they don't exist
-            grep -q "FOREGROUND_SERVICE" "$MANIFEST" || sed -i '/<manifest/a \    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' "$MANIFEST"
-            grep -q "FOREGROUND_SERVICE_MEDIA_PLAYBACK" "$MANIFEST" || sed -i '/<manifest/a \    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />' "$MANIFEST"
-            grep -q "WAKE_LOCK" "$MANIFEST" || sed -i '/<manifest/a \    <uses-permission android:name="android.permission.WAKE_LOCK" />' "$MANIFEST"
-            
-            # Add Foreground Service declaration if it doesn't exist
-            if ! grep -q "ForegroundService" "$MANIFEST"; then
-              sed -i '/<\/activity>/a \        <service android:name="com.capawesome.capacitor.plugins.foregroundservice.ForegroundService" android:foregroundServiceType="mediaPlayback" android:exported="false" />' "$MANIFEST"
-            fi
+            # Simple, non-destructive sed inserts
+            sed -i '/<manifest/a \    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' "$MANIFEST"
+            sed -i '/<manifest/a \    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />' "$MANIFEST"
+            sed -i '/<manifest/a \    <uses-permission android:name="android.permission.WAKE_LOCK" />' "$MANIFEST"
+            sed -i '/<\/activity>/a \        <service android:name="com.capawesome.capacitor.plugins.foregroundservice.ForegroundService" android:foregroundServiceType="mediaPlayback" android:exported="false" />' "$MANIFEST"
+            echo "Manifest patched"
+            cat "$MANIFEST" # Debug output to see final manifest
           fi
 
       - name: Grant execute permission for gradlew
         run: chmod +x android/gradlew
 
-      - name: Clean and Build APK
+      - name: Build APK (with Debug Output)
         working-directory: ./android
         run: |
           ./gradlew clean
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDebug --stacktrace --info
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
