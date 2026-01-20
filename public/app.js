@@ -35,12 +35,29 @@ const sourceSelectorContainer = document.getElementById('source-selector-contain
 const volumeSlider = document.getElementById('volume-slider');
 const volumeContainer = document.querySelector('.volume-container');
 
+// Global error logger for APK
+window.onerror = function (msg, url, lineNo, columnNo, error) {
+    const debugStatus = document.getElementById('debug-status');
+    if (debugStatus) debugStatus.textContent = 'ERROR: ' + msg;
+    return false;
+};
+
+window.onunhandledrejection = function (event) {
+    const debugStatus = document.getElementById('debug-status');
+    if (debugStatus) debugStatus.textContent = 'PROMISE ERROR: ' + event.reason;
+};
+
 const DEFAULT_SERVER = 'audioporter-pro.onrender.com';
 
 function initSocket(customUrl) {
     let socketUrl;
     if (customUrl) {
-        socketUrl = customUrl;
+        // Force ws instead of wss for local IPs if they start with 192.168 or are localhost
+        if (customUrl.startsWith('ws') && (customUrl.includes('192.168.') || customUrl.includes('127.0.0.1') || customUrl.includes('localhost'))) {
+            socketUrl = customUrl.replace('wss://', 'ws://');
+        } else {
+            socketUrl = customUrl;
+        }
     } else {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         if (window.location.protocol === 'file:') {
@@ -54,15 +71,20 @@ function initSocket(customUrl) {
     }
 
     console.log("Attempting to connect to:", socketUrl);
+    alert("Target URL: " + socketUrl);
     state.serverUrl = socketUrl;
+
+    // Update debug info immediately
+    const serverEl = document.getElementById('debug-server');
+    const statusEl = document.getElementById('debug-status');
+    if (serverEl) serverEl.textContent = socketUrl;
+    if (statusEl) statusEl.textContent = 'Connecting...';
+
     state.socket = new WebSocket(socketUrl);
 
     state.socket.onopen = () => {
         console.log('Connected to signaling server at:', socketUrl);
-        const statusEl = document.getElementById('debug-status');
-        const serverEl = document.getElementById('debug-server');
-        if (statusEl) statusEl.textContent = 'Connected';
-        if (serverEl) serverEl.textContent = socketUrl;
+        if (statusEl) statusEl.textContent = 'Connected ✅';
 
         if (state.role === 'pc') {
             state.socket.send(JSON.stringify({
@@ -76,11 +98,13 @@ function initSocket(customUrl) {
 
     state.socket.onerror = (error) => {
         console.error('WebSocket error:', error);
+        if (statusEl) statusEl.textContent = 'Error ❌';
         updateStatus('Connection failed', 'error');
     };
 
-    state.socket.onclose = () => {
-        console.log('WebSocket closed');
+    state.socket.onclose = (event) => {
+        console.log('WebSocket closed:', event.code, event.reason);
+        if (statusEl) statusEl.textContent = `Closed (${event.code})`;
         updateStatus('Disconnected', 'error');
     };
 
@@ -455,5 +479,17 @@ volumeSlider.addEventListener('input', (e) => {
 });
 document.getElementById('stop-stream').addEventListener('click', () => location.reload());
 document.getElementById('add-network').addEventListener('click', () => {
-    promptForNewNetwork();
+    // This is now "Refresh Saved"
+    location.reload();
+});
+
+document.getElementById('search-ip-btn')?.addEventListener('click', () => {
+    const ipInput = document.getElementById('manual-ip-input');
+    const ip = ipInput?.value.trim();
+    if (ip) {
+        addNetwork(ip, ip);
+        initSocket(`ws://${ip}:3000`);
+    } else {
+        alert("Please enter a valid IP address");
+    }
 });

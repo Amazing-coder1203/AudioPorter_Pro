@@ -45,6 +45,8 @@ wss.on('connection', (ws, req) => {
     let currentRole = null;
     let partnerId = null;
 
+    console.log(`New connection: ${socketId} from ${publicIp}`);
+
     // Immediately send server info to the new connection
     ws.send(JSON.stringify({
         type: 'server_info',

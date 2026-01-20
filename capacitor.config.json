@@ -5,6 +5,6 @@
     "bundledWebRuntime": false,
     "server": {
         "cleartext": true,
-        "androidScheme": "https"
+        "androidScheme": "http"
     }
 }

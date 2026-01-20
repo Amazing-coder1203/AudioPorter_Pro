@@ -99,7 +99,14 @@
                             <span>Scanning...</span>
                         </div>
                     </div>
-                    <button id="add-network" class="primary-btn" style="margin-top: 1rem;">+ Add Network</button>
+                    <div id="manual-search"
+                        style="margin-top: 1rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                        <input type="text" id="manual-ip-input" placeholder="Enter PC IP (e.g. 192.168.1.8)"
+                            style="padding: 0.8rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.1); color: white;">
+                        <button id="search-ip-btn" class="primary-btn">Connect to IP</button>
+                    </div>
+                    <button id="add-network" class="outline-btn" style="margin-top: 1rem; width: 100%;">Refresh
+                        Saved</button>
 
                     <div id="debug-info"
                         style="margin-top: 1rem; padding: 1rem; background: rgba(255,255,255,0.1); border-radius: 8px; font-size: 0.8rem; text-align: left;">
