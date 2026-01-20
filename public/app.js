@@ -1,10 +1,9 @@
 /**
- * AudioPorter - Core Logic
+ * AudioPorter - Discovery Logic
  */
 
 const state = {
-    role: null, // 'pc' or 'phone'
-    roomCode: null,
+    role: null,
     socket: null,
     peerConnection: null,
     stream: null,
@@ -12,11 +11,11 @@ const state = {
     audioCtx: null,
     gainNode: null,
     heartbeatInterval: null,
-    scanner: null,
-    serverIP: null,
+    myId: null,
+    partnerId: null,
+    pcName: 'My Computer'
 };
 
-// UI Elements
 const screens = {
     selection: document.getElementById('selection-screen'),
     pc: document.getElementById('pc-screen'),
@@ -24,52 +23,43 @@ const screens = {
     active: document.getElementById('active-screen'),
 };
 
-const pcCodeDisplay = document.getElementById('pc-code');
-const pcStatusLed = document.getElementById('pc-status-led');
-const pcStatusText = document.getElementById('pc-status-text');
+const pcIdentity = document.getElementById('pc-identity');
+const pcListContainer = document.getElementById('pc-list');
 const startBtn = document.getElementById('start-stream');
 const changeSourceBtn = document.getElementById('change-source');
-
-const phoneStatusLed = document.getElementById('phone-status-led');
-const phoneStatusText = document.getElementById('phone-status-text');
-const connectPhoneBtn = document.getElementById('connect-phone');
-const codeInputs = document.querySelectorAll('.code-input');
 const audioSourceSelect = document.getElementById('audio-source');
 const volumeSlider = document.getElementById('volume-slider');
 const volumeContainer = document.querySelector('.volume-container');
 
-// Replace this with your actual Render/Heroku URL when you publish
-const DEFAULT_PRODUCTION_SERVER = 'audioporter-pro.onrender.com';
+const DEFAULT_SERVER = 'audioporter-pro.onrender.com';
 
-// Initialize WebSocket
 function initSocket(customUrl) {
-    // Determine the target URL
     let socketUrl;
-
     if (customUrl) {
         socketUrl = customUrl;
     } else {
-        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-
-        // If we're on a real website, use the current host. If in APK, use production server.
         if (window.location.protocol === 'file:') {
-            socketUrl = `wss://${DEFAULT_PRODUCTION_SERVER}`;
+            // For APK: You'll still need to scan or enter IP if not using a global server
+            // But for this "No Code" version, we use the local network discovery
+            // We'll try to find the server via a broadcast-like check or manual input if it fails
+            socketUrl = `wss://${DEFAULT_SERVER}`;
         } else {
             socketUrl = `${protocol}//${window.location.host}`;
         }
     }
 
-    console.log("Connecting to:", socketUrl);
     state.socket = new WebSocket(socketUrl);
 
-    // Attach events to the current socket
-    initSocketEvents();
-
     state.socket.onopen = () => {
-        console.log('Server connection established');
-        if (state.role && state.roomCode) {
-            joinRoom();
+        console.log('Connected to signaling server');
+        if (state.role === 'pc') {
+            state.socket.send(JSON.stringify({
+                type: 'register_pc',
+                identity: `${state.pcName} (${window.location.hostname})`
+            }));
+        } else if (state.role === 'phone') {
+            state.socket.send(JSON.stringify({ type: 'request_discovery' }));
         }
     };
 
@@ -77,565 +67,226 @@ function initSocket(customUrl) {
         const data = JSON.parse(event.data);
 
         switch (data.type) {
-            case 'ready':
-                handlePartnerJoined();
+            case 'discovery_update':
+                if (state.role === 'phone') updatePCList(data.pcs);
+                break;
+            case 'connection_request':
+                handleConnectionRequest(data.fromId);
+                break;
+            case 'connection_accepted':
+                state.partnerId = data.fromId;
+                startWebRTC(true); // Phone starts as initiator
                 break;
             case 'signal':
-                handleSignal(data.data);
-                break;
-            case 'server_info':
-                state.serverIP = data.ip;
-                // If we are on PC and have a room code, generate QR
-                if (state.role === 'pc' && state.roomCode) {
-                    generatePairingQR();
-                }
+                handleSignal(data.data, data.fromId);
                 break;
             case 'partner_disconnected':
                 handlePartnerLeft();
                 break;
-            case 'error':
-                alert(data.message);
-                updateStatus(data.message, 'error');
-                break;
         }
-    };
-
-    state.socket.onclose = () => {
-        updateStatus('Disconnected', 'error');
-        stopHeartbeat();
-        setTimeout(initSocket, 3000); // Try to reconnect
     };
 }
 
-function startHeartbeat() {
-    if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
-    state.heartbeatInterval = setInterval(() => {
-        if (state.socket && state.socket.readyState === WebSocket.OPEN) {
-            state.socket.send(JSON.stringify({ type: 'ping' }));
-        }
-    }, 20000); // Ping every 20 seconds
+function updatePCList(pcs) {
+    pcListContainer.innerHTML = '';
+    if (pcs.length === 0) {
+        pcListContainer.innerHTML = '<p class="hint">No PCs found on your network. Make sure AudioPorter is open on your PC.</p>';
+        return;
+    }
+
+    pcs.forEach(pc => {
+        const item = document.createElement('div');
+        item.className = 'pc-item';
+        item.innerHTML = `
+            <div class="pc-icon">💻</div>
+            <div class="pc-info">
+                <h4>${pc.identity}</h4>
+                <p>Ready to stream</p>
+            </div>
+        `;
+        item.onclick = () => requestConnection(pc.id);
+        pcListContainer.appendChild(item);
+    });
 }
 
-function stopHeartbeat() {
-    if (state.heartbeatInterval) {
-        clearInterval(state.heartbeatInterval);
-        state.heartbeatInterval = null;
+function requestConnection(pcId) {
+    state.partnerId = pcId;
+    state.socket.send(JSON.stringify({
+        type: 'connect_request',
+        targetId: pcId
+    }));
+    updateStatus('Requesting connection...', 'waiting');
+}
+
+function handleConnectionRequest(fromId) {
+    // For "No Code" version, PC accepts automatically for now, or shows a prompt
+    // Let's show a simple confirm for security
+    if (confirm("A phone wants to connect to your audio. Accept?")) {
+        state.partnerId = fromId;
+        state.socket.send(JSON.stringify({
+            type: 'connection_accepted',
+            targetId: fromId
+        }));
+        updateStatus('Phone Linked', 'connected');
+        startBtn.disabled = false;
     }
 }
 
-// Navigation
+// UI Navigation
 function showScreen(screenId) {
     Object.values(screens).forEach(s => s.classList.remove('active'));
     screens[screenId].classList.add('active');
 
-    // Show/hide 'Change Source' button and Volume based on role and screen
     if (screenId === 'active') {
-        if (state.role === 'pc') {
-            changeSourceBtn.style.display = 'block';
-            volumeContainer.style.display = 'none';
-        } else {
-            changeSourceBtn.style.display = 'none';
-            volumeContainer.style.display = 'flex';
-        }
-    } else {
-        changeSourceBtn.style.display = 'none';
-        volumeContainer.style.display = 'none';
+        volumeContainer.style.display = state.role === 'phone' ? 'flex' : 'none';
+        changeSourceBtn.style.display = state.role === 'pc' ? 'block' : 'none';
     }
 }
 
-// Room Logic
-function generateRoomCode() {
-    return Math.floor(1000 + Math.random() * 9000).toString();
-}
-
-function joinRoom() {
-    state.socket.send(JSON.stringify({
-        type: 'join',
-        room: state.roomCode,
-        role: state.role
-    }));
-    startHeartbeat();
-}
-
-// PC Side Logic
 async function setupPC() {
     state.role = 'pc';
-    state.roomCode = generateRoomCode();
-    pcCodeDisplay.textContent = state.roomCode;
-
     showScreen('pc');
-    updateStatus('Waiting for phone...', 'waiting');
-
-    // Request permission early to get device labels, then populate list
+    pcIdentity.textContent = "Your PC";
+    initSocket();
     initDeviceList();
-
-    if (!state.socket || state.socket.readyState !== WebSocket.OPEN) initSocket();
-    else joinRoom();
 }
 
-function generatePairingQR() {
-    if (!state.serverIP || !state.roomCode) return;
-
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const pairingData = `aplink:${state.roomCode}@${protocol}//${state.serverIP}:${window.location.port || 3000}`;
-
-    const typeNumber = 0;
-    const errorCorrectionLevel = 'L';
-    const qr = qrcode(typeNumber, errorCorrectionLevel);
-    qr.addData(pairingData);
-    qr.make();
-    document.getElementById('qrcode').innerHTML = qr.createImgTag(5);
-}
-
-async function initDeviceList() {
-    try {
-        // Trigger a temporary stream to get permission and labels
-        const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        tempStream.getTracks().forEach(t => t.stop());
-
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const audioDevices = devices.filter(device => device.kind === 'audioinput');
-
-        audioSourceSelect.innerHTML = '';
-        audioDevices.forEach(device => {
-            const option = document.createElement('option');
-            option.value = device.deviceId;
-            option.text = device.label || `Microphone ${audioSourceSelect.length + 1}`;
-            audioSourceSelect.appendChild(option);
-        });
-    } catch (err) {
-        console.error("Error listing devices:", err);
-    }
-}
-
-async function startCapture() {
-    try {
-        const selectedDeviceId = audioSourceSelect.value;
-        const constraints = {
-            audio: {
-                deviceId: selectedDeviceId ? { exact: selectedDeviceId } : undefined,
-                echoCancellation: false,
-                noiseSuppression: false,
-                autoGainControl: false,
-            }
-        };
-
-        state.stream = await navigator.mediaDevices.getUserMedia(constraints);
-
-        const audioTrack = state.stream.getAudioTracks()[0];
-        if (!audioTrack) {
-            alert("No audio track found.");
-            return;
-        }
-
-        setupWebRTC();
-
-        // Add track to peer connection
-        state.peerConnection.addTrack(audioTrack, state.stream);
-
-        // Create Offer
-        const offer = await state.peerConnection.createOffer();
-        await state.peerConnection.setLocalDescription(offer);
-
-        state.socket.send(JSON.stringify({
-            type: 'signal',
-            data: offer
-        }));
-
-        showScreen('active');
-        document.getElementById('stream-status').textContent = "Broadcasting Audio";
-
-    } catch (err) {
-        console.error("Error capturing audio:", err);
-        alert("Failed to capture system audio. Ensure you use a desktop browser and grant permissions.");
-    }
-}
-
-async function changeSource() {
-    try {
-        const selectedDeviceId = audioSourceSelect.value;
-        const constraints = {
-            audio: {
-                deviceId: selectedDeviceId ? { exact: selectedDeviceId } : undefined,
-                echoCancellation: false,
-                noiseSuppression: false,
-                autoGainControl: false
-            }
-        };
-
-        const newStream = await navigator.mediaDevices.getUserMedia(constraints);
-
-        const newAudioTrack = newStream.getAudioTracks()[0];
-        if (!newAudioTrack) {
-            alert("No audio track found.");
-            return;
-        }
-
-        // Find the audio sender and replace the track
-        if (state.peerConnection) {
-            const senders = state.peerConnection.getSenders();
-            const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
-
-            if (audioSender) {
-                await audioSender.replaceTrack(newAudioTrack);
-
-                // Stop old tracks to clean up
-                if (state.stream) {
-                    state.stream.getTracks().forEach(track => track.stop());
-                }
-                state.stream = newStream;
-                console.log("Audio source successfully changed");
-            }
-        }
-    } catch (err) {
-        if (err.name === 'NotAllowedError') {
-            console.log("User cancelled source selection");
-        } else {
-            console.error("Error changing source:", err);
-            alert("Failed to change audio source.");
-        }
-    }
-}
-
-// Phone Side Logic
 function setupPhone() {
     state.role = 'phone';
     showScreen('phone');
-    // In APK, immediately try to connect to the default production server if not already connected
-    if (!state.socket || state.socket.readyState !== WebSocket.OPEN) {
-        initSocket();
-    }
-}
-
-function getEnteredCode() {
-    let code = '';
-    codeInputs.forEach(input => code += input.value);
-    return code;
-}
-
-function connectPhone() {
-    const code = getEnteredCode();
-    if (code.length !== 4) return;
-
-    state.roomCode = code;
-
-    // Ensure we have a socket before joining
-    if (!state.socket || state.socket.readyState !== WebSocket.OPEN) {
-        initSocket();
-        state.socket.onopen = () => joinRoom();
-    } else {
-        joinRoom();
-    }
-    updateStatus('Connecting to room...', 'waiting');
-}
-
-function startScanner() {
-    const reader = document.getElementById('qr-reader');
-    reader.style.display = 'block';
-
-    state.scanner = new Html5Qrcode("qr-reader");
-    const config = { fps: 10, qrbox: { width: 250, height: 250 } };
-
-    state.scanner.start({ facingMode: "environment" }, config, (decodedText) => {
-        if (decodedText.startsWith('aplink:')) {
-            // Format: aplink:CODE@ws://IP:PORT
-            const [code, serverUrl] = decodedText.replace('aplink:', '').split('@');
-
-            state.roomCode = code;
-
-            // Re-initialize socket with the scanned IP
-            if (state.socket) state.socket.close();
-            initSocket(serverUrl);
-
-            // Wait for open to join
-            state.socket.onopen = () => {
-                joinRoom();
-                updateStatus('Connected via QR', 'ready');
-            };
-
-            stopScanner();
-        }
-    });
-}
-
-function stopScanner() {
-    if (state.scanner) {
-        state.scanner.stop().then(() => {
-            document.getElementById('qr-reader').style.display = 'none';
-        });
-    }
-}
-
-function initSocketEvents() {
-    state.socket.onmessage = async (event) => {
-        const data = JSON.parse(event.data);
-        switch (data.type) {
-            case 'ready': handlePartnerJoined(); break;
-            case 'signal': handleSignal(data.data); break;
-            case 'server_info': state.serverIP = data.ip; break;
-            case 'partner_disconnected': handlePartnerLeft(); break;
-            case 'error': alert(data.message); updateStatus(data.message, 'error'); break;
-        }
-    };
-
-    state.socket.onclose = () => {
-        updateStatus('Disconnected', 'error');
-        stopHeartbeat();
-        setTimeout(initSocket, 3000);
-    };
+    // If in APK, we need user to input the PC's IP if discovery fails
+    // But for local web use, it works automatically
+    initSocket();
 }
 
 // WebRTC Logic
-function setupWebRTC() {
-    const config = {
-        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-    };
-
+async function startWebRTC(isInitiator) {
+    const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
     state.peerConnection = new RTCPeerConnection(config);
 
     state.peerConnection.onicecandidate = (event) => {
-        if (event.candidate) {
+        if (event.candidate && state.partnerId) {
             state.socket.send(JSON.stringify({
                 type: 'signal',
+                targetId: state.partnerId,
                 data: event.candidate
             }));
         }
     };
 
-    state.peerConnection.ontrack = (event) => {
-        console.log('Received track');
-
-        if (!state.audioElement) {
-            state.audioElement = document.createElement('audio');
-            state.audioElement.id = 'remote-audio';
-            state.audioElement.autoplay = true;
-            state.audioElement.playsInline = true;
-            state.audioElement.muted = true; // Mute to prevent echo (AudioContext handles output)
-            state.audioElement.style.display = 'none';
-            document.body.appendChild(state.audioElement);
-        }
-
-        state.audioElement.srcObject = event.streams[0];
-
-        // Setup Web Audio API for volume boosting (more bandwidth/gain)
-        if (!state.audioCtx) {
-            state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            state.gainNode = state.audioCtx.createGain();
-
-            const source = state.audioCtx.createMediaStreamSource(event.streams[0]);
-            source.connect(state.gainNode);
-            state.gainNode.connect(state.audioCtx.destination);
-
-            // Set initial volume from slider
-            state.gainNode.gain.value = volumeSlider.value;
-        }
-
-        // Start playback and initialize background session
-        state.audioElement.play().then(() => {
-            if (state.audioCtx.state === 'suspended') {
-                state.audioCtx.resume();
+    if (state.role === 'phone') {
+        state.peerConnection.ontrack = (event) => {
+            if (!state.audioElement) {
+                state.audioElement = document.createElement('audio');
+                state.audioElement.autoplay = true;
+                state.audioElement.playsInline = true;
+                state.audioElement.muted = true;
+                document.body.appendChild(state.audioElement);
             }
-            console.log("Playback started successfully");
-            setupMediaSession();
-            requestWakeLock();
-            startSilentAnchor(); // Keep context alive
-        }).catch(e => {
-            console.error("Playback failed:", e);
-            updateStatus('Tap to enable audio', 'error');
-            // Adding a manual resume for browsers that block autoplay
-            window.addEventListener('click', () => state.audioElement.play(), { once: true });
-        });
+            state.audioElement.srcObject = event.streams[0];
 
-        showScreen('active');
-        document.getElementById('stream-status').textContent = "Receiving Audio";
-        document.getElementById('stream-info').textContent = "Background streaming active";
-    };
-}
-
-// Silent Audio Anchor - Prevents mobile browsers from killing the audio context
-function startSilentAnchor() {
-    if (state.silentInterval) return;
-
-    // Resume context on user interaction if needed
-    const resume = () => {
-        if (state.audioCtx && state.audioCtx.state === 'suspended') {
-            state.audioCtx.resume();
-        }
-    };
-    window.addEventListener('click', resume, { once: true });
-    window.addEventListener('touchstart', resume, { once: true });
-
-    // Create a tiny silent oscillator to keep the audio pipeline warm
-    const audioCtx = state.audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-    const oscillator = audioCtx.createOscillator();
-    const gainNode = audioCtx.createGain();
-
-    gainNode.gain.value = 0.001; // Silent but not zero to keep it active
-    oscillator.connect(gainNode);
-    gainNode.connect(audioCtx.destination);
-    oscillator.start();
-
-    console.log("Silent anchor active");
-}
-
-// Keep the audio playing when screen locks
-function setupMediaSession() {
-    if ('mediaSession' in navigator) {
-        navigator.mediaSession.metadata = new MediaMetadata({
-            title: 'AudioPorter Live',
-            artist: 'Streaming from PC',
-            album: 'Real-time Audio',
-            artwork: [
-                { src: 'https://cdn-icons-png.flaticon.com/512/3659/3659899.png', sizes: '512x512', type: 'image/png' }
-            ]
-        });
-
-        navigator.mediaSession.playbackState = 'playing';
-
-        const actionHandlers = [
-            ['play', () => state.audioElement && state.audioElement.play()],
-            ['pause', () => {
-                // We don't actually pause the stream to avoid desync
-                console.log("Pause requested but ignored to maintain sync");
-            }],
-            ['stop', () => location.reload()],
-        ];
-
-        for (const [action, handler] of actionHandlers) {
-            try {
-                navigator.mediaSession.setActionHandler(action, handler);
-            } catch (error) {
-                console.log(`Action ${action} not supported`);
+            // Setup Gain Node
+            if (!state.audioCtx) {
+                state.audioCtx = new AudioContext();
+                state.gainNode = state.audioCtx.createGain();
+                const source = state.audioCtx.createMediaStreamSource(event.streams[0]);
+                source.connect(state.gainNode);
+                state.gainNode.connect(state.audioCtx.destination);
             }
-        }
-    }
-}
 
-// Request Screen Wake Lock to prevent sleep
-let wakeLock = null;
-async function requestWakeLock() {
-    try {
-        if ('wakeLock' in navigator) {
-            wakeLock = await navigator.wakeLock.request('screen');
-            console.log('Wake Lock is active');
-
-            wakeLock.addEventListener('release', () => {
-                console.log('Wake Lock was released');
+            state.audioElement.play().then(() => {
+                showScreen('active');
             });
-        }
-    } catch (err) {
-        console.error(`${err.name}, ${err.message}`);
+        };
+    }
+
+    if (isInitiator) {
+        const offer = await state.peerConnection.createOffer();
+        await state.peerConnection.setLocalDescription(offer);
+        state.socket.send(JSON.stringify({
+            type: 'signal',
+            targetId: state.partnerId,
+            data: offer
+        }));
     }
 }
 
-async function handleSignal(signal) {
-    if (!state.peerConnection) setupWebRTC();
+async function handleSignal(signal, fromId) {
+    if (!state.peerConnection) await startWebRTC(false);
 
+    if (signal.type === 'offer') {
+        await state.peerConnection.setRemoteDescription(new RTCSessionDescription(signal));
+        const answer = await state.peerConnection.createAnswer();
+        await state.peerConnection.setLocalDescription(answer);
+        state.socket.send(JSON.stringify({
+            type: 'signal',
+            targetId: fromId,
+            data: answer
+        }));
+    } else if (signal.type === 'answer') {
+        await state.peerConnection.setRemoteDescription(new RTCSessionDescription(signal));
+    } else if (signal.candidate) {
+        await state.peerConnection.addIceCandidate(new RTCIceCandidate(signal));
+    }
+}
+
+// Capture Logic
+async function startCapture() {
+    const selectedDeviceId = audioSourceSelect.value;
+    state.stream = await navigator.mediaDevices.getUserMedia({
+        audio: { deviceId: selectedDeviceId ? { exact: selectedDeviceId } : undefined }
+    });
+
+    state.stream.getTracks().forEach(track => {
+        state.peerConnection.addTrack(track, state.stream);
+    });
+
+    const offer = await state.peerConnection.createOffer();
+    await state.peerConnection.setLocalDescription(offer);
+    state.socket.send(JSON.stringify({
+        type: 'signal',
+        targetId: state.partnerId,
+        data: offer
+    }));
+
+    showScreen('active');
+}
+
+async function initDeviceList() {
     try {
-        if (signal.type === 'offer') {
-            await state.peerConnection.setRemoteDescription(new RTCSessionDescription(signal));
-            const answer = await state.peerConnection.createAnswer();
-            await state.peerConnection.setLocalDescription(answer);
-            state.socket.send(JSON.stringify({
-                type: 'signal',
-                data: answer
-            }));
-        } else if (signal.type === 'answer') {
-            await state.peerConnection.setRemoteDescription(new RTCSessionDescription(signal));
-        } else if (signal.candidate) {
-            await state.peerConnection.addIceCandidate(new RTCIceCandidate(signal));
-        }
-    } catch (e) {
-        console.error("Signal handling error:", e);
-    }
+        const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        tempStream.getTracks().forEach(t => t.stop());
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioDevices = devices.filter(device => device.kind === 'audioinput');
+        audioSourceSelect.innerHTML = '';
+        audioDevices.forEach(device => {
+            const option = document.createElement('option');
+            option.value = device.deviceId;
+            option.text = device.label || 'Default';
+            audioSourceSelect.appendChild(option);
+        });
+    } catch (e) { }
 }
 
-// UI Helpers
 function updateStatus(text, ledClass) {
-    const statusLed = state.role === 'pc' ? pcStatusLed : phoneStatusLed;
-    const statusText = state.role === 'pc' ? pcStatusText : phoneStatusText;
-
-    if (statusLed) {
-        statusLed.className = 'status-indicator ' + ledClass;
-    }
-    if (statusText) {
-        statusText.textContent = text;
-    }
-
-    if (state.role === 'pc' && ledClass === 'connected') {
-        startBtn.disabled = false;
-    }
-}
-
-function handlePartnerJoined() {
-    updateStatus('Partner Connected', 'ready');
-    if (state.role === 'pc') {
-        startBtn.disabled = false;
-    }
+    const statusLed = state.role === 'pc' ? document.getElementById('pc-status-led') : document.getElementById('phone-status-led');
+    const statusText = state.role === 'pc' ? document.getElementById('pc-status-text') : document.getElementById('phone-status-text');
+    if (statusLed) statusLed.className = 'status-indicator ' + ledClass;
+    if (statusText) statusText.textContent = text;
 }
 
 function handlePartnerLeft() {
-    updateStatus('Partner disconnected', 'waiting');
-    if (state.role === 'pc') {
-        startBtn.disabled = true;
-    }
-    // If we were in active screen, go back
-    if (screens.active.classList.contains('active')) {
-        showScreen(state.role === 'pc' ? 'pc' : 'phone');
-    }
+    location.reload();
 }
 
-// Event Listeners
+// Listeners
 document.getElementById('select-pc').addEventListener('click', setupPC);
 document.getElementById('select-phone').addEventListener('click', setupPhone);
-
-document.querySelectorAll('.back-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-        state.role = null;
-        state.roomCode = null;
-        showScreen('selection');
-    });
-});
-
 startBtn.addEventListener('click', startCapture);
-changeSourceBtn.addEventListener('click', changeSource);
-connectPhoneBtn.addEventListener('click', connectPhone);
-document.getElementById('scan-qr').addEventListener('click', startScanner);
-
 volumeSlider.addEventListener('input', (e) => {
-    const val = parseFloat(e.target.value);
-    if (state.gainNode) {
-        state.gainNode.gain.value = val;
-    }
-
-    // Update visual feedback for boosting
-    if (val > 1) {
-        volumeContainer.style.borderColor = `rgba(99, 102, 241, ${0.1 + (val - 1) / 2})`;
-        volumeContainer.style.boxShadow = `0 0 ${10 + (val - 1) * 10}px rgba(99, 102, 241, ${(val - 1) / 4})`;
-    } else {
-        volumeContainer.style.borderColor = '';
-        volumeContainer.style.boxShadow = '';
-    }
+    if (state.gainNode) state.gainNode.gain.value = e.target.value;
 });
-
-document.getElementById('stop-stream').addEventListener('click', () => {
-    location.reload(); // Simple reset
-});
-
-// Auto-focus code inputs
-codeInputs.forEach((input, idx) => {
-    input.addEventListener('input', (e) => {
-        if (e.target.value.length === 1 && idx < 3) {
-            codeInputs[idx + 1].focus();
-        }
-        if (getEnteredCode().length === 4) {
-            connectPhoneBtn.focus();
-        }
-    });
-
-    input.addEventListener('keydown', (e) => {
-        if (e.key === 'Backspace' && !e.target.value && idx > 0) {
-            codeInputs[idx - 1].focus();
-        }
-    });
+document.getElementById('stop-stream').addEventListener('click', () => location.reload());
+document.getElementById('refresh-discovery').addEventListener('click', () => {
+    if (state.socket) state.socket.send(JSON.stringify({ type: 'request_discovery' }));
 });

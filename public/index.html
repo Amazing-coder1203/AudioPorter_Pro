@@ -60,15 +60,11 @@
         <section id="pc-screen" class="screen">
             <button class="back-btn">&larr; Back</button>
             <div class="content">
-                <div class="pairing-container">
-                    <span class="label">Pairing Code</span>
-                    <div id="pc-code" class="code-display">----</div>
-                    <p class="hint">Enter this code on your phone</p>
-
-                    <div class="qr-pairing">
-                        <p class="label">Or Scan to Link</p>
-                        <div id="qrcode" class="qrcode-box"></div>
-                    </div>
+                <div class="discovery-header">
+                    <div class="discovery-icon">📡</div>
+                    <h2>Signal Active</h2>
+                    <p>Your PC is visible on the local network as:</p>
+                    <div id="pc-identity" class="identity-display">Detecting...</div>
                 </div>
 
                 <div class="status-box">
@@ -93,28 +89,23 @@
         <section id="phone-screen" class="screen">
             <button class="back-btn">&larr; Back</button>
             <div class="content">
-                <div class="input-container">
-                    <h2>Enter Code</h2>
-                    <div class="code-inputs">
-                        <input type="number" maxlength="1" class="code-input" data-index="0">
-                        <input type="number" maxlength="1" class="code-input" data-index="1">
-                        <input type="number" maxlength="1" class="code-input" data-index="2">
-                        <input type="number" maxlength="1" class="code-input" data-index="3">
+                <div class="discovery-container">
+                    <h2>Available PCs</h2>
+                    <p class="hint">Searching your local network...</p>
+                    <div id="pc-list" class="pc-list">
+                        <!-- Discovered PCs will appear here -->
+                        <div class="searching-loader">
+                            <div class="pulse-ring"></div>
+                            <span>Scanning...</span>
+                        </div>
                     </div>
+                    <button id="refresh-discovery" class="outline-btn">Refresh List</button>
                 </div>
 
                 <div class="status-box">
                     <div class="status-indicator" id="phone-status-led"></div>
                     <span id="phone-status-text">Ready to connect</span>
                 </div>
-
-                <div class="controls">
-                    <button id="connect-phone" class="primary-btn">Connect & Listen</button>
-                    <button id="scan-qr" class="outline-btn" style="margin-top: 1rem;">Scan QR Code</button>
-                </div>
-
-                <div id="qr-reader"
-                    style="width: 100%; display: none; margin-top: 1rem; border-radius: 12px; overflow: hidden;"></div>
             </div>
         </section>
 
