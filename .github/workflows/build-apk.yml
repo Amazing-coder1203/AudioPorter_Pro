@@ -18,15 +18,17 @@ jobs:
           distribution: 'temurin'
 
       - name: Install dependencies
-        run: npm install
-
-      - name: Initialize Capacitor
         run: |
-          npx cap init AudioPorter com.audioporter.app --web-dir public
-          npx cap add android
+          npm install
+          npm install @capacitor/core @capacitor/android @capacitor/cli
 
-      - name: Build Android Project
-        run: npx cap copy android
+      - name: Add Android Platform
+        run: |
+          npx cap add android || echo "Android already added"
+          npx cap copy android
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x android/gradlew
 
       - name: Build APK
         working-directory: ./android
@@ -35,5 +37,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v3
         with:
-          name: app-debug
+          name: AudioPorter-Pro-Debug-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
