@@ -26,37 +26,42 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Sync Capacitor
+      - name: Setup Capacitor
         run: |
-          if [ ! -d "android" ]; then
-            node ./node_modules/@capacitor/cli/bin/cap add android
-          fi
-          node ./node_modules/@capacitor/cli/bin/cap sync android
+          npx cap add android || echo "Android platform already exists"
+          npx cap sync android
 
       - name: Patch Android Project
         run: |
-          # 1. SDK Update
+          # 1. Update SDK Versions
           VAR_FILE="android/variables.gradle"
           if [ -f "$VAR_FILE" ]; then
             sed -i 's/compileSdkVersion = [0-9]*/compileSdkVersion = 34/' "$VAR_FILE"
             sed -i 's/targetSdkVersion = [0-9]*/targetSdkVersion = 34/' "$VAR_FILE"
+            echo "SDK versions updated to 34"
           fi
 
-          # 2. Manifest Patch (Permissions & Service)
+          # 2. Patch AndroidManifest.xml for Background Audio
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          # Permissions
+          
+          # Add Permissions (using sed to insert after <manifest)
           sed -i '/<manifest/a \    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' "$MANIFEST"
           sed -i '/<manifest/a \    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />' "$MANIFEST"
           sed -i '/<manifest/a \    <uses-permission android:name="android.permission.WAKE_LOCK" />' "$MANIFEST"
-          # Service
+          
+          # Add Foreground Service declaration (using sed to insert after </activity>)
           sed -i '/<\/activity>/a \        <service android:name="com.capawesome.capacitor.plugins.foregroundservice.ForegroundService" android:foregroundServiceType="mediaPlayback" android:exported="false" />' "$MANIFEST"
+          
+          echo "AndroidManifest.xml patched successfully"
 
       - name: Grant execute permission for gradlew
         run: chmod +x android/gradlew
 
       - name: Build APK
         working-directory: ./android
-        run: ./gradlew assembleDebug --stacktrace
+        run: |
+          ./gradlew clean
+          ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
