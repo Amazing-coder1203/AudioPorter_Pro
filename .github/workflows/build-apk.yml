@@ -28,10 +28,11 @@ jobs:
 
       - name: Sync Capacitor
         run: |
+          # Use local bin for speed and reliability, and bypass all prompts
           if [ ! -d "android" ]; then
-            npx --yes cap add android
+            npm exec cap add android -- --app-id com.audioporter.app --app-name AudioPorter
           fi
-          npx --yes cap sync android
+          npm exec cap sync android
 
       - name: Force SDK 34 and Permissions
         run: |
