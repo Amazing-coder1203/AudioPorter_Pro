@@ -59,6 +59,11 @@ function initSocket(customUrl) {
 
     state.socket.onopen = () => {
         console.log('Connected to signaling server at:', socketUrl);
+        const statusEl = document.getElementById('debug-status');
+        const serverEl = document.getElementById('debug-server');
+        if (statusEl) statusEl.textContent = 'Connected';
+        if (serverEl) serverEl.textContent = socketUrl;
+
         if (state.role === 'pc') {
             state.socket.send(JSON.stringify({
                 type: 'register_pc',
@@ -84,6 +89,9 @@ function initSocket(customUrl) {
 
         switch (data.type) {
             case 'discovery_update':
+                console.log('Received discovery_update:', data);
+                const countEl = document.getElementById('debug-pc-count');
+                if (countEl) countEl.textContent = data.pcs?.length || 0;
                 if (state.role === 'phone') updatePCList(data.pcs);
                 break;
             case 'server_info':
