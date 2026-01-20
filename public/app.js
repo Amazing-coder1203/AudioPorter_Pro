@@ -147,8 +147,6 @@ function requestConnection(pcId) {
 }
 
 function handleConnectionRequest(fromId) {
-    // For "No Code" version, PC accepts automatically for now, or shows a prompt
-    // Let's show a simple confirm for security
     if (confirm("A phone wants to connect to your audio. Accept?")) {
         state.partnerId = fromId;
         state.socket.send(JSON.stringify({
@@ -156,7 +154,13 @@ function handleConnectionRequest(fromId) {
             targetId: fromId
         }));
         updateStatus('Phone Linked', 'connected');
+
+        // Initialize WebRTC for PC side
+        startWebRTC(false);
+
+        // Enable the start button and init device list
         startBtn.disabled = false;
+        initDeviceList();
     }
 }
 
@@ -298,24 +302,91 @@ async function handleSignal(signal, fromId) {
 
 // Capture Logic
 async function startCapture() {
-    const selectedDeviceId = audioSourceSelect.value;
-    state.stream = await navigator.mediaDevices.getUserMedia({
-        audio: { deviceId: selectedDeviceId ? { exact: selectedDeviceId } : undefined }
-    });
+    try {
+        const selectedDeviceId = audioSourceSelect.value;
+        state.stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+                deviceId: selectedDeviceId ? { exact: selectedDeviceId } : undefined,
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false
+            }
+        });
 
-    state.stream.getTracks().forEach(track => {
-        state.peerConnection.addTrack(track, state.stream);
-    });
+        state.stream.getTracks().forEach(track => {
+            state.peerConnection.addTrack(track, state.stream);
+        });
 
-    const offer = await state.peerConnection.createOffer();
-    await state.peerConnection.setLocalDescription(offer);
-    state.socket.send(JSON.stringify({
-        type: 'signal',
-        targetId: state.partnerId,
-        data: offer
-    }));
+        const offer = await state.peerConnection.createOffer();
+        await state.peerConnection.setLocalDescription(offer);
+        state.socket.send(JSON.stringify({
+            type: 'signal',
+            targetId: state.partnerId,
+            data: offer
+        }));
 
-    showScreen('active');
+        showScreen('active');
+        document.getElementById('stream-status').textContent = "Broadcasting Audio";
+    } catch (err) {
+        console.error("Error capturing audio:", err);
+        alert("Failed to capture audio. Please check your microphone permissions.");
+    }
+}
+
+async function changeSource() {
+    try {
+        // Get available devices
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioDevices = devices.filter(device => device.kind === 'audioinput');
+
+        // Create a simple selection prompt
+        let deviceList = "Available audio sources:\n\n";
+        audioDevices.forEach((device, index) => {
+            deviceList += `${index + 1}. ${device.label || 'Unknown Device'}\n`;
+        });
+        deviceList += `\nEnter the number of the device you want to use (1-${audioDevices.length}):`;
+
+        const selection = prompt(deviceList);
+        if (!selection) return;
+
+        const deviceIndex = parseInt(selection) - 1;
+        if (deviceIndex < 0 || deviceIndex >= audioDevices.length) {
+            alert("Invalid selection");
+            return;
+        }
+
+        const selectedDevice = audioDevices[deviceIndex];
+        const newStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+                deviceId: { exact: selectedDevice.deviceId },
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false
+            }
+        });
+
+        const newAudioTrack = newStream.getAudioTracks()[0];
+        if (!newAudioTrack) {
+            alert("No audio track found.");
+            return;
+        }
+
+        // Replace the track
+        const senders = state.peerConnection.getSenders();
+        const audioSender = senders.find(s => s.track && s.track.kind === 'audio');
+
+        if (audioSender) {
+            await audioSender.replaceTrack(newAudioTrack);
+            if (state.stream) {
+                state.stream.getTracks().forEach(track => track.stop());
+            }
+            state.stream = newStream;
+            alert(`Switched to: ${selectedDevice.label || 'Selected Device'}`);
+        }
+    } catch (err) {
+        console.error("Error changing source:", err);
+        alert("Failed to change audio source: " + err.message);
+    }
 }
 
 async function initDeviceList() {
@@ -349,6 +420,7 @@ function handlePartnerLeft() {
 document.getElementById('select-pc').addEventListener('click', setupPC);
 document.getElementById('select-phone').addEventListener('click', setupPhone);
 startBtn.addEventListener('click', startCapture);
+changeSourceBtn.addEventListener('click', changeSource);
 volumeSlider.addEventListener('input', (e) => {
     if (state.gainNode) state.gainNode.gain.value = e.target.value;
 });
