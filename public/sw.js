@@ -1,4 +1,4 @@
-const CACHE_NAME = 'audioporter-v1';
+const CACHE_NAME = 'audioporter-v3';
 const ASSETS = [
     './',
     './index.html',
@@ -17,6 +17,17 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
+    event.waitUntil(
+        caches.keys().then((cacheNames) => {
+            return Promise.all(
+                cacheNames.map((cacheName) => {
+                    if (cacheName !== CACHE_NAME) {
+                        return caches.delete(cacheName);
+                    }
+                })
+            );
+        })
+    );
     event.waitUntil(clients.claim());
 });
 
