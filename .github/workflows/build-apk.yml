@@ -27,35 +27,49 @@ jobs:
         run: |
           npm install --legacy-peer-deps
 
-      - name: Setup Capacitor
+      - name: Fresh Android Project Initialization
         run: |
-          npx cap add android || npx cap sync android
+          # Remove existing android folder to start clean
+          rm -rf android
+          
+          # Add and sync android
+          npx cap add android
           npx cap sync android
 
-      - name: Patch Android Project for Background Audio
+      - name: Configure Android Project (SDK 34 & Permissions)
         run: |
-          # 1. Update SDK versions to 34 (Required for mediaPlayback service type in Android 14)
-          VARIABLES_PATH="android/variables.gradle"
-          if [ -f "$VARIABLES_PATH" ]; then
-            sed -i 's/targetSdkVersion = [0-9]*/targetSdkVersion = 34/' $VARIABLES_PATH
-            sed -i 's/compileSdkVersion = [0-9]*/compileSdkVersion = 34/' $VARIABLES_PATH
-            echo "Updated variables.gradle to SDK 34"
-          fi
+          # 1. Force SDK 34 in variables.gradle
+          cat > android/variables.gradle <<EOF
+          ext {
+              minSdkVersion = 22
+              compileSdkVersion = 34
+              targetSdkVersion = 34
+              androidxActivityVersion = '1.8.0'
+              androidxAppCompatVersion = '1.6.1'
+              androidxCoordinatorLayoutVersion = '1.2.0'
+              androidxCoreVersion = '1.12.0'
+              androidxFragmentVersion = '1.6.2'
+              junitVersion = '4.13.2'
+              androidxJunitVersion = '1.1.5'
+              androidxEspressoCoreVersion = '3.5.1'
+              cordovaAndroidVersion = '10.1.1'
+          }
+          EOF
 
-          # 2. Patch AndroidManifest.xml
+          # 2. Add permissions and service to AndroidManifest.xml
           MANIFEST_PATH="android/app/src/main/AndroidManifest.xml"
           
-          # Add permissions (using a safer append method)
-          # We'll use a temporary file to ensure we don't duplicate or break things
-          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' $MANIFEST_PATH
-          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />' $MANIFEST_PATH
-          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.WAKE_LOCK" />' $MANIFEST_PATH
+          # Define the content to be inserted (permissions and service)
+          PERMISSIONS='    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />\n    <uses-permission android:name="android.permission.WAKE_LOCK" />'
+          SERVICE='        <service android:name="com.capawesome.capacitor.plugins.foregroundservice.ForegroundService" android:foregroundServiceType="mediaPlayback" android:exported="false" />'
+
+          # Inject permissions after <manifest> tag
+          sed -i "/<manifest/a $PERMISSIONS" $MANIFEST_PATH
           
-          # Add service declaration inside <application> tag
-          # We'll insert it after the MainActivity's </activity> tag
-          sed -i '/<\/activity>/a \        <service android:name="com.capawesome.capacitor.plugins.foregroundservice.ForegroundService" android:foregroundServiceType="mediaPlayback" android:exported="false" />' $MANIFEST_PATH
-          
-          echo "Patched AndroidManifest.xml"
+          # Inject service after the main activity's </activity>
+          sed -i "/<\/activity>/a $SERVICE" $MANIFEST_PATH
+
+          echo "Android project configured and patched."
 
       - name: Grant execute permission for gradlew
         run: chmod +x android/gradlew
