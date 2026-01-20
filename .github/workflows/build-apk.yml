@@ -25,46 +25,42 @@ jobs:
 
       - name: Install dependencies
         run: |
-          rm -rf node_modules package-lock.json
-          npm install --legacy-peer-deps
+          npm install
+          npm install @capacitor/cli @capacitor/core @capacitor/android @capacitor/app @capacitor/device @capacitor/local-notifications @capawesome-team/capacitor-foreground-service --legacy-peer-deps
 
       - name: Setup Capacitor
         run: |
           npx cap add android || echo "Android platform already exists"
           npx cap sync android
+          npx cap copy android
 
-      - name: Patch Android Project (Background Audio Fixes)
+      - name: Patch Android Project (Background Audio)
         run: |
-          # 1. Update SDK Versions (Required for Android 14 mediaPlayback)
+          # 1. SDK Update to 34 (Required for mediaPlayback)
           VAR_FILE="android/variables.gradle"
           if [ -f "$VAR_FILE" ]; then
             sed -i 's/compileSdkVersion = [0-9]*/compileSdkVersion = 34/' "$VAR_FILE"
             sed -i 's/targetSdkVersion = [0-9]*/targetSdkVersion = 34/' "$VAR_FILE"
-            echo "Updated SDK to 34"
           fi
 
-          # 2. Patch AndroidManifest.xml
+          # 2. Manifest Patch
           MANIFEST="android/app/src/main/AndroidManifest.xml"
-          
-          # Remove any previous injections to avoid duplicates
-          sed -i '/FOREGROUND_SERVICE/d' "$MANIFEST"
-          sed -i '/WAKE_LOCK/d' "$MANIFEST"
-          sed -i '/ForegroundService/d' "$MANIFEST"
-          
-          # Add permissions before the closing </manifest> tag
-          sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' "$MANIFEST"
-          sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />' "$MANIFEST"
-          sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.WAKE_LOCK" />' "$MANIFEST"
-          
-          # Add the foreground service before the closing </application> tag
-          sed -i '/<\/application>/i \        <service android:name="com.capawesome.capacitor.plugins.foregroundservice.ForegroundService" android:foregroundServiceType="mediaPlayback" android:exported="false" />' "$MANIFEST"
-          
-          echo "Manifest patched successfully"
+          if [ -f "$MANIFEST" ]; then
+            # Add permissions if they don't exist
+            grep -q "FOREGROUND_SERVICE" "$MANIFEST" || sed -i '/<manifest/a \    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' "$MANIFEST"
+            grep -q "FOREGROUND_SERVICE_MEDIA_PLAYBACK" "$MANIFEST" || sed -i '/<manifest/a \    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />' "$MANIFEST"
+            grep -q "WAKE_LOCK" "$MANIFEST" || sed -i '/<manifest/a \    <uses-permission android:name="android.permission.WAKE_LOCK" />' "$MANIFEST"
+            
+            # Add Foreground Service declaration if it doesn't exist
+            if ! grep -q "ForegroundService" "$MANIFEST"; then
+              sed -i '/<\/activity>/a \        <service android:name="com.capawesome.capacitor.plugins.foregroundservice.ForegroundService" android:foregroundServiceType="mediaPlayback" android:exported="false" />' "$MANIFEST"
+            fi
+          fi
 
       - name: Grant execute permission for gradlew
         run: chmod +x android/gradlew
 
-      - name: Build APK
+      - name: Clean and Build APK
         working-directory: ./android
         run: |
           ./gradlew clean
@@ -75,3 +71,4 @@ jobs:
         with:
           name: AudioPorter-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
