@@ -20,12 +20,13 @@ jobs:
       - name: Install dependencies
         run: |
           npm install
-          npm install @capacitor/core @capacitor/android @capacitor/cli
+          npm install @capacitor/cli @capacitor/core @capacitor/android
 
-      - name: Add Android Platform
+      - name: Initialize Capacitor
         run: |
-          npx cap add android || echo "Android already added"
-          npx cap copy android
+          # If the folder doesn't exist, this forces it to be created
+          npx cap add android || true
+          npx cap sync android
 
       - name: Grant execute permission for gradlew
         run: chmod +x android/gradlew
@@ -35,7 +36,7 @@ jobs:
         run: ./gradlew assembleDebug
 
       - name: Upload APK
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: AudioPorter-Pro-Debug-APK
+          name: AudioPorter-Pro-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
