@@ -128,7 +128,14 @@
                     <input type="range" id="volume-slider" min="0" max="3" step="0.01" value="1">
                     <span class="icon">🔊</span>
                 </div>
-                <button id="change-source" class="primary-btn" style="display: none;">Change Source</button>
+
+                <div id="source-selector-container" class="source-selector-container" style="display: none;">
+                    <label for="active-audio-source">Audio Source:</label>
+                    <select id="active-audio-source" class="source-select">
+                        <option value="">Loading...</option>
+                    </select>
+                </div>
+
                 <button id="stop-stream" class="outline-btn">Disconnect</button>
             </div>
         </section>

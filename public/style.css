@@ -353,6 +353,21 @@ header p {
     border-color: var(--primary);
 }
 
+.source-selector-container {
+    width: 100%;
+    max-width: 300px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    text-align: left;
+}
+
+.source-selector-container label {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    margin-left: 0.5rem;
+}
+
 /* Code Inputs */
 .code-inputs {
     display: flex;

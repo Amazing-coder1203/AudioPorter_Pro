@@ -29,8 +29,9 @@ const screens = {
 const pcIdentity = document.getElementById('pc-identity');
 const pcListContainer = document.getElementById('pc-list');
 const startBtn = document.getElementById('start-stream');
-const changeSourceBtn = document.getElementById('change-source');
 const audioSourceSelect = document.getElementById('audio-source');
+const activeAudioSourceSelect = document.getElementById('active-audio-source');
+const sourceSelectorContainer = document.getElementById('source-selector-container');
 const volumeSlider = document.getElementById('volume-slider');
 const volumeContainer = document.querySelector('.volume-container');
 
@@ -52,10 +53,12 @@ function initSocket(customUrl) {
         }
     }
 
+    console.log("Attempting to connect to:", socketUrl);
+    state.serverUrl = socketUrl;
     state.socket = new WebSocket(socketUrl);
 
     state.socket.onopen = () => {
-        console.log('Connected to signaling server');
+        console.log('Connected to signaling server at:', socketUrl);
         if (state.role === 'pc') {
             state.socket.send(JSON.stringify({
                 type: 'register_pc',
@@ -64,6 +67,16 @@ function initSocket(customUrl) {
         } else if (state.role === 'phone') {
             state.socket.send(JSON.stringify({ type: 'request_discovery' }));
         }
+    };
+
+    state.socket.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        updateStatus('Connection failed', 'error');
+    };
+
+    state.socket.onclose = () => {
+        console.log('WebSocket closed');
+        updateStatus('Disconnected', 'error');
     };
 
     state.socket.onmessage = async (event) => {
@@ -171,7 +184,12 @@ function showScreen(screenId) {
 
     if (screenId === 'active') {
         volumeContainer.style.display = state.role === 'phone' ? 'flex' : 'none';
-        changeSourceBtn.style.display = state.role === 'pc' ? 'block' : 'none';
+        sourceSelectorContainer.style.display = state.role === 'pc' ? 'flex' : 'none';
+
+        // Populate active audio source dropdown for PC
+        if (state.role === 'pc') {
+            populateActiveAudioSources();
+        }
     }
 }
 
@@ -333,11 +351,38 @@ async function startCapture() {
     }
 }
 
-async function changeSource() {
+async function populateActiveAudioSources() {
     try {
-        // Request new audio with the browser's device picker
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioDevices = devices.filter(device => device.kind === 'audioinput');
+
+        activeAudioSourceSelect.innerHTML = '';
+        audioDevices.forEach(device => {
+            const option = document.createElement('option');
+            option.value = device.deviceId;
+            option.text = device.label || 'Unknown Device';
+            // Select the currently active device
+            if (state.stream && state.stream.getAudioTracks()[0]) {
+                const currentTrack = state.stream.getAudioTracks()[0];
+                if (currentTrack.getSettings().deviceId === device.deviceId) {
+                    option.selected = true;
+                }
+            }
+            activeAudioSourceSelect.appendChild(option);
+        });
+    } catch (err) {
+        console.error("Error listing devices:", err);
+    }
+}
+
+async function changeActiveSource() {
+    try {
+        const selectedDeviceId = activeAudioSourceSelect.value;
+        if (!selectedDeviceId) return;
+
         const newStream = await navigator.mediaDevices.getUserMedia({
             audio: {
+                deviceId: { exact: selectedDeviceId },
                 echoCancellation: false,
                 noiseSuppression: false,
                 autoGainControl: false
@@ -345,10 +390,7 @@ async function changeSource() {
         });
 
         const newAudioTrack = newStream.getAudioTracks()[0];
-        if (!newAudioTrack) {
-            alert("No audio track found.");
-            return;
-        }
+        if (!newAudioTrack) return;
 
         // Replace the track
         const senders = state.peerConnection.getSenders();
@@ -363,12 +405,8 @@ async function changeSource() {
             console.log("Audio source changed successfully");
         }
     } catch (err) {
-        if (err.name === 'NotAllowedError') {
-            console.log("User cancelled device selection");
-        } else {
-            console.error("Error changing source:", err);
-            alert("Failed to change audio source: " + err.message);
-        }
+        console.error("Error changing source:", err);
+        alert("Failed to change audio source: " + err.message);
     }
 }
 
@@ -403,7 +441,7 @@ function handlePartnerLeft() {
 document.getElementById('select-pc').addEventListener('click', setupPC);
 document.getElementById('select-phone').addEventListener('click', setupPhone);
 startBtn.addEventListener('click', startCapture);
-changeSourceBtn.addEventListener('click', changeSource);
+activeAudioSourceSelect.addEventListener('change', changeActiveSource);
 volumeSlider.addEventListener('input', (e) => {
     if (state.gainNode) state.gainNode.gain.value = e.target.value;
 });
