@@ -24,19 +24,18 @@ jobs:
           distribution: 'temurin'
 
       - name: Install dependencies
-        run: |
-          npm cache clean --force
-          npm install --legacy-peer-deps --no-audit --no-fund @capacitor/cli@5 @capacitor/core@5 @capacitor/android@5 @capacitor/app@5 @capacitor/device@5 @capacitor/local-notifications@5 @capawesome-team/capacitor-foreground-service@5.1.0
+        run: npm install --legacy-peer-deps
 
-      - name: Sync Android Project
+      - name: Sync Capacitor
         run: |
-          # Use local capacitor binary for reliability
-          node ./node_modules/@capacitor/cli/bin/cap add android || echo "Already exists"
-          node ./node_modules/@capacitor/cli/bin/cap sync android
+          if [ ! -d "android" ]; then
+            npx --yes cap add android
+          fi
+          npx --yes cap sync android
 
       - name: Force SDK 34 and Permissions
         run: |
-          # 1. Update SDK Versions
+          # 1. Update SDK Versions (Required for background audio on Android 14)
           VAR_FILE="android/variables.gradle"
           if [ -f "$VAR_FILE" ]; then
             sed -i 's/compileSdkVersion = [0-9]*/compileSdkVersion = 34/' "$VAR_FILE"
@@ -46,14 +45,14 @@ jobs:
           # 2. Patch AndroidManifest.xml
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           
-          # Add Permissions if missing
+          # Add Permissions
           for PERM in "FOREGROUND_SERVICE" "FOREGROUND_SERVICE_MEDIA_PLAYBACK" "WAKE_LOCK"; do
             if ! grep -q "$PERM" "$MANIFEST"; then
               sed -i "/<manifest/a \    <uses-permission android:name=\"android.permission.$PERM\" />" "$MANIFEST"
             fi
           done
           
-          # Add Service if missing
+          # Add Foreground Service declaration
           SERVICE="com.capawesome.capacitor.plugins.foregroundservice.ForegroundService"
           if ! grep -q "$SERVICE" "$MANIFEST"; then
             sed -i "/<\/activity>/a \        <service android:name=\"$SERVICE\" android:foregroundServiceType=\"mediaPlayback\" android:exported=\"false\" />" "$MANIFEST"
@@ -62,10 +61,9 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x android/gradlew
 
-      - name: Build APK (Release Mode for stability)
+      - name: Build APK
         working-directory: ./android
-        run: |
-          ./gradlew assembleDebug --stacktrace
+        run: ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

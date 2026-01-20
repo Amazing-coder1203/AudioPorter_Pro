@@ -1,0 +1,14 @@
+node_modules/
+android/
+ios/
+dist/
+public/capacitor.js
+public/cordova.js
+public/cordova_plugins.js
+public/plugins/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+.env
+.capacitor/
