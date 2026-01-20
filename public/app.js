@@ -13,7 +13,10 @@ const state = {
     heartbeatInterval: null,
     myId: null,
     partnerId: null,
-    pcName: 'My Computer'
+    pcName: 'My Computer',
+    serverUrl: null,
+    savedNetworks: [], // Array of {ip, name} objects
+    activeConnections: [] // WebSocket connections to different networks
 };
 
 const screens = {
@@ -70,6 +73,17 @@ function initSocket(customUrl) {
             case 'discovery_update':
                 if (state.role === 'phone') updatePCList(data.pcs);
                 break;
+            case 'server_info':
+                if (state.role === 'pc') {
+                    state.pcName = data.hostname;
+                    pcIdentity.textContent = `${state.pcName} [${data.ip}]`;
+                    // Re-register with the real hostname
+                    state.socket.send(JSON.stringify({
+                        type: 'register_pc',
+                        identity: state.pcName
+                    }));
+                }
+                break;
             case 'connection_request':
                 handleConnectionRequest(data.fromId);
                 break;
@@ -104,7 +118,21 @@ function updatePCList(pcs) {
                 <p>Ready to stream</p>
             </div>
         `;
+
+        // Single click to connect
         item.onclick = () => requestConnection(pc.id);
+
+        // Long press to show forget option
+        let pressTimer;
+        item.onmousedown = item.ontouchstart = () => {
+            pressTimer = setTimeout(() => {
+                if (confirm(`Forget this network?`)) {
+                    forgetCurrentNetwork();
+                }
+            }, 800);
+        };
+        item.onmouseup = item.ontouchend = () => clearTimeout(pressTimer);
+
         pcListContainer.appendChild(item);
     });
 }
@@ -154,9 +182,47 @@ async function setupPC() {
 function setupPhone() {
     state.role = 'phone';
     showScreen('phone');
-    // If in APK, we need user to input the PC's IP if discovery fails
-    // But for local web use, it works automatically
-    initSocket();
+
+    // Load saved networks
+    const savedNetworksJson = localStorage.getItem('audioporter_networks');
+    state.savedNetworks = savedNetworksJson ? JSON.parse(savedNetworksJson) : [];
+
+    // If we have saved networks, connect to all of them to discover PCs
+    if (state.savedNetworks.length > 0) {
+        connectToSavedNetworks();
+    } else {
+        // First time user - prompt for IP
+        promptForNewNetwork();
+    }
+}
+
+function connectToSavedNetworks() {
+    // For simplicity, we'll connect to the first saved network
+    // In a more advanced version, we could maintain multiple WebSocket connections
+    const network = state.savedNetworks[0];
+    initSocket(`ws://${network.ip}:3000`);
+}
+
+function promptForNewNetwork() {
+    const ip = prompt("Enter your PC's IP address (e.g., 192.168.1.5):");
+    if (ip) {
+        const name = prompt("Give this network a name (e.g., Home, Office):") || ip;
+        addNetwork(ip, name);
+        initSocket(`ws://${ip}:3000`);
+    }
+}
+
+function addNetwork(ip, name) {
+    state.savedNetworks.push({ ip, name });
+    localStorage.setItem('audioporter_networks', JSON.stringify(state.savedNetworks));
+}
+
+function forgetCurrentNetwork() {
+    // Remove the currently connected network
+    const currentIp = state.serverUrl?.split('//')[1]?.split(':')[0];
+    state.savedNetworks = state.savedNetworks.filter(n => n.ip !== currentIp);
+    localStorage.setItem('audioporter_networks', JSON.stringify(state.savedNetworks));
+    location.reload();
 }
 
 // WebRTC Logic
@@ -287,6 +353,6 @@ volumeSlider.addEventListener('input', (e) => {
     if (state.gainNode) state.gainNode.gain.value = e.target.value;
 });
 document.getElementById('stop-stream').addEventListener('click', () => location.reload());
-document.getElementById('refresh-discovery').addEventListener('click', () => {
-    if (state.socket) state.socket.send(JSON.stringify({ type: 'request_discovery' }));
+document.getElementById('add-network').addEventListener('click', () => {
+    promptForNewNetwork();
 });

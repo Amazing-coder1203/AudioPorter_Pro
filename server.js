@@ -35,6 +35,7 @@ function getLocalIP() {
 }
 
 const localIP = getLocalIP();
+const hostname = os.hostname();
 let nextId = 1;
 
 wss.on('connection', (ws, req) => {
@@ -43,6 +44,14 @@ wss.on('connection', (ws, req) => {
 
     let currentRole = null;
     let partnerId = null;
+
+    // Immediately send server info to the new connection
+    ws.send(JSON.stringify({
+        type: 'server_info',
+        ip: localIP,
+        hostname: hostname,
+        port: PORT
+    }));
 
     ws.on('message', (message) => {
         try {
