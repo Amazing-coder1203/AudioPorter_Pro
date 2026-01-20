@@ -34,6 +34,20 @@ jobs:
           npx cap sync android
           npx cap copy android
 
+      - name: Patch Android Manifest for Foreground Service
+        run: |
+          MANIFEST_PATH="android/app/src/main/AndroidManifest.xml"
+          # Add permissions if they don't exist
+          grep -q "android.permission.FOREGROUND_SERVICE" $MANIFEST_PATH || sed -i '/<manifest/a \    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' $MANIFEST_PATH
+          grep -q "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" $MANIFEST_PATH || sed -i '/<manifest/a \    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />' $MANIFEST_PATH
+          grep -q "android.permission.WAKE_LOCK" $MANIFEST_PATH || sed -i '/<manifest/a \    <uses-permission android:name="android.permission.WAKE_LOCK" />' $MANIFEST_PATH
+          
+          # Add service declaration for the foreground service plugin
+          if ! grep -q "com.capawesome.capacitor.plugins.foregroundservice.ForegroundService" $MANIFEST_PATH; then
+            # Insert service tag after the main activity's closing tag
+            sed -i '/<\/activity>/a \        <service android:name="com.capawesome.capacitor.plugins.foregroundservice.ForegroundService" android:foregroundServiceType="mediaPlayback" />' $MANIFEST_PATH
+          fi
+
       - name: Grant execute permission for gradlew
         run: chmod +x android/gradlew
 

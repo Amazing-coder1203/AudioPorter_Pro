@@ -16,7 +16,8 @@ const state = {
     pcName: 'My Computer',
     serverUrl: null,
     savedNetworks: [], // Array of {ip, name} objects
-    activeConnections: [] // WebSocket connections to different networks
+    activeConnections: [], // WebSocket connections to different networks
+    isForegroundServiceActive: false
 };
 
 const screens = {
@@ -46,6 +47,50 @@ window.onunhandledrejection = function (event) {
     const debugStatus = document.getElementById('debug-status');
     if (debugStatus) debugStatus.textContent = 'PROMISE ERROR: ' + event.reason;
 };
+
+async function startForegroundService() {
+    if (window.Capacitor && window.Capacitor.isNativePlatform() && !state.isForegroundServiceActive) {
+        try {
+            // Request notification permission for Android 13+
+            if (Capacitor.Plugins.LocalNotifications) {
+                const perm = await Capacitor.Plugins.LocalNotifications.requestPermissions();
+                if (perm.display !== 'granted') {
+                    console.warn("Notification permission not granted, foreground service might not be visible.");
+                }
+            }
+
+            const { ForegroundService } = Capacitor.Plugins;
+            if (ForegroundService) {
+                await ForegroundService.start({
+                    id: 12345,
+                    title: 'AudioPorter Active',
+                    body: 'Streaming high-quality audio...',
+                    smallIcon: 'ic_launcher',
+                    importance: 3
+                });
+                state.isForegroundServiceActive = true;
+                console.log("Foreground service started");
+            }
+        } catch (e) {
+            console.error("Foreground service failed", e);
+        }
+    }
+}
+
+async function stopForegroundService() {
+    if (window.Capacitor && window.Capacitor.isNativePlatform() && state.isForegroundServiceActive) {
+        try {
+            const { ForegroundService } = Capacitor.Plugins;
+            if (ForegroundService) {
+                await ForegroundService.stop();
+                state.isForegroundServiceActive = false;
+                console.log("Foreground service stopped");
+            }
+        } catch (e) {
+            console.error("Foreground service stop failed", e);
+        }
+    }
+}
 
 const DEFAULT_SERVER = 'audioporter-pro.onrender.com';
 
@@ -316,6 +361,7 @@ async function startWebRTC(isInitiator) {
 
             state.audioElement.play().then(() => {
                 showScreen('active');
+                startForegroundService(); // Start background service when audio starts
             });
         };
     }
@@ -477,7 +523,10 @@ activeAudioSourceSelect.addEventListener('change', changeActiveSource);
 volumeSlider.addEventListener('input', (e) => {
     if (state.gainNode) state.gainNode.gain.value = e.target.value;
 });
-document.getElementById('stop-stream').addEventListener('click', () => location.reload());
+document.getElementById('stop-stream').addEventListener('click', () => {
+    stopForegroundService();
+    location.reload();
+});
 document.getElementById('add-network').addEventListener('click', () => {
     // This is now "Refresh Saved"
     location.reload();
