@@ -24,35 +24,42 @@ jobs:
           distribution: 'temurin'
 
       - name: Install dependencies
-        run: npm install --legacy-peer-deps
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install --legacy-peer-deps
 
       - name: Setup Capacitor
         run: |
           npx cap add android || echo "Android platform already exists"
           npx cap sync android
 
-      - name: Patch Android Project
+      - name: Patch Android Project (Background Audio Fixes)
         run: |
-          # 1. Update SDK Versions
+          # 1. Update SDK Versions (Required for Android 14 mediaPlayback)
           VAR_FILE="android/variables.gradle"
           if [ -f "$VAR_FILE" ]; then
             sed -i 's/compileSdkVersion = [0-9]*/compileSdkVersion = 34/' "$VAR_FILE"
             sed -i 's/targetSdkVersion = [0-9]*/targetSdkVersion = 34/' "$VAR_FILE"
-            echo "SDK versions updated to 34"
+            echo "Updated SDK to 34"
           fi
 
-          # 2. Patch AndroidManifest.xml for Background Audio
+          # 2. Patch AndroidManifest.xml
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           
-          # Add Permissions (using sed to insert after <manifest)
-          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' "$MANIFEST"
-          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />' "$MANIFEST"
-          sed -i '/<manifest/a \    <uses-permission android:name="android.permission.WAKE_LOCK" />' "$MANIFEST"
+          # Remove any previous injections to avoid duplicates
+          sed -i '/FOREGROUND_SERVICE/d' "$MANIFEST"
+          sed -i '/WAKE_LOCK/d' "$MANIFEST"
+          sed -i '/ForegroundService/d' "$MANIFEST"
           
-          # Add Foreground Service declaration (using sed to insert after </activity>)
-          sed -i '/<\/activity>/a \        <service android:name="com.capawesome.capacitor.plugins.foregroundservice.ForegroundService" android:foregroundServiceType="mediaPlayback" android:exported="false" />' "$MANIFEST"
+          # Add permissions before the closing </manifest> tag
+          sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' "$MANIFEST"
+          sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />' "$MANIFEST"
+          sed -i '/<\/manifest>/i \    <uses-permission android:name="android.permission.WAKE_LOCK" />' "$MANIFEST"
           
-          echo "AndroidManifest.xml patched successfully"
+          # Add the foreground service before the closing </application> tag
+          sed -i '/<\/application>/i \        <service android:name="com.capawesome.capacitor.plugins.foregroundservice.ForegroundService" android:foregroundServiceType="mediaPlayback" android:exported="false" />' "$MANIFEST"
+          
+          echo "Manifest patched successfully"
 
       - name: Grant execute permission for gradlew
         run: chmod +x android/gradlew
