@@ -335,30 +335,9 @@ async function startCapture() {
 
 async function changeSource() {
     try {
-        // Get available devices
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const audioDevices = devices.filter(device => device.kind === 'audioinput');
-
-        // Create a simple selection prompt
-        let deviceList = "Available audio sources:\n\n";
-        audioDevices.forEach((device, index) => {
-            deviceList += `${index + 1}. ${device.label || 'Unknown Device'}\n`;
-        });
-        deviceList += `\nEnter the number of the device you want to use (1-${audioDevices.length}):`;
-
-        const selection = prompt(deviceList);
-        if (!selection) return;
-
-        const deviceIndex = parseInt(selection) - 1;
-        if (deviceIndex < 0 || deviceIndex >= audioDevices.length) {
-            alert("Invalid selection");
-            return;
-        }
-
-        const selectedDevice = audioDevices[deviceIndex];
+        // Request new audio with the browser's device picker
         const newStream = await navigator.mediaDevices.getUserMedia({
             audio: {
-                deviceId: { exact: selectedDevice.deviceId },
                 echoCancellation: false,
                 noiseSuppression: false,
                 autoGainControl: false
@@ -381,11 +360,15 @@ async function changeSource() {
                 state.stream.getTracks().forEach(track => track.stop());
             }
             state.stream = newStream;
-            alert(`Switched to: ${selectedDevice.label || 'Selected Device'}`);
+            console.log("Audio source changed successfully");
         }
     } catch (err) {
-        console.error("Error changing source:", err);
-        alert("Failed to change audio source: " + err.message);
+        if (err.name === 'NotAllowedError') {
+            console.log("User cancelled device selection");
+        } else {
+            console.error("Error changing source:", err);
+            alert("Failed to change audio source: " + err.message);
+        }
     }
 }
 
