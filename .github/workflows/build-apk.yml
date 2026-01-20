@@ -3,6 +3,7 @@ name: Build Android APK
 on:
   push:
     branches: [ main, master ]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -11,7 +12,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: set up JDK 17
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
           java-version: '17'
@@ -19,24 +25,27 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm install
+          npm ci
           npm install @capacitor/cli @capacitor/core @capacitor/android
 
-      - name: Initialize Capacitor
+      - name: Setup Capacitor
         run: |
-          # If the folder doesn't exist, this forces it to be created
-          npx cap add android || true
+          npx cap add android || echo "Android platform already exists"
           npx cap sync android
+          npx cap copy android
 
       - name: Grant execute permission for gradlew
         run: chmod +x android/gradlew
 
-      - name: Build APK
+      - name: Clean and Build APK
         working-directory: ./android
-        run: ./gradlew assembleDebug
+        run: |
+          ./gradlew clean
+          ./gradlew assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: AudioPorter-Pro-APK
+          name: AudioPorter-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
