@@ -1,0 +1,9 @@
+{
+    "appId": "com.audioporter.app",
+    "appName": "AudioPorter",
+    "webDir": "public",
+    "bundledWebRuntime": false,
+    "server": {
+        "cleartext": true
+    }
+}

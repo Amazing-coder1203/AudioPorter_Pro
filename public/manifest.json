@@ -1,0 +1,38 @@
+{
+    "name": "AudioPorter",
+    "short_name": "AudioPorter",
+    "id": "/index.html",
+    "start_url": "./index.html",
+    "scope": "./",
+    "display": "standalone",
+    "orientation": "portrait",
+    "background_color": "#0f172a",
+    "theme_color": "#6366f1",
+    "description": "Seamless High-Quality Audio Streaming",
+    "icons": [
+        {
+            "src": "https://cdn-icons-png.flaticon.com/512/3659/3659899.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "https://cdn-icons-png.flaticon.com/512/3659/3659899.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable"
+        },
+        {
+            "src": "https://cdn-icons-png.flaticon.com/512/3659/3659899.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "https://cdn-icons-png.flaticon.com/512/3659/3659899.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ]
+}

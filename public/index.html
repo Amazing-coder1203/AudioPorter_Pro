@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AudioPorter | Seamless Audio Streaming</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#6366f1">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3659/3659899.png">
+</head>
+
+<body>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('Service Worker registered'))
+                    .catch(err => console.log('Service Worker registration failed', err));
+            });
+        }
+    </script>
+    <div class="glass-bg"></div>
+
+    <main id="app">
+        <!-- Selection Screen -->
+        <section id="selection-screen" class="screen active">
+            <header>
+                <h1>Audio<span>Porter</span></h1>
+                <p>Stream high-quality audio to your phone instantly.</p>
+                <div class="network-badge">🔒 Same Wi-Fi Required</div>
+            </header>
+
+            <div class="options">
+                <button id="select-pc" class="card">
+                    <div class="icon">💻</div>
+                    <h2>PC / Sender</h2>
+                    <p>Share your computer's audio</p>
+                </button>
+
+                <button id="select-phone" class="card">
+                    <div class="icon">📱</div>
+                    <h2>Phone / Receiver</h2>
+                    <p>Listen on your mobile device</p>
+                </button>
+            </div>
+        </section>
+
+        <!-- PC Screen -->
+        <section id="pc-screen" class="screen">
+            <button class="back-btn">&larr; Back</button>
+            <div class="content">
+                <div class="pairing-container">
+                    <span class="label">Pairing Code</span>
+                    <div id="pc-code" class="code-display">----</div>
+                    <p class="hint">Enter this code on your phone</p>
+                </div>
+
+                <div class="status-box">
+                    <div class="status-indicator" id="pc-status-led"></div>
+                    <span id="pc-status-text">Waiting for connection...</span>
+                </div>
+
+                <div class="device-selector">
+                    <label for="audio-source">Select Source:</label>
+                    <select id="audio-source" class="source-select">
+                        <option value="">System Default</option>
+                    </select>
+                </div>
+
+                <div class="controls">
+                    <button id="start-stream" class="primary-btn" disabled>Start Audio Stream</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Phone Screen -->
+        <section id="phone-screen" class="screen">
+            <button class="back-btn">&larr; Back</button>
+            <div class="content">
+                <div class="input-container">
+                    <h2>Enter Code</h2>
+                    <div class="code-inputs">
+                        <input type="number" maxlength="1" class="code-input" data-index="0">
+                        <input type="number" maxlength="1" class="code-input" data-index="1">
+                        <input type="number" maxlength="1" class="code-input" data-index="2">
+                        <input type="number" maxlength="1" class="code-input" data-index="3">
+                    </div>
+                </div>
+
+                <div class="status-box">
+                    <div class="status-indicator" id="phone-status-led"></div>
+                    <span id="phone-status-text">Ready to connect</span>
+                </div>
+
+                <div class="controls">
+                    <button id="connect-phone" class="primary-btn">Connect & Listen</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Active Stream Screen -->
+        <section id="active-screen" class="screen">
+            <div class="visualizer-container">
+                <div class="wave-container">
+                    <div class="wave"></div>
+                    <div class="wave"></div>
+                    <div class="wave"></div>
+                </div>
+                <div id="active-icon" class="main-icon">📡</div>
+            </div>
+            <h2 id="stream-status">Streaming Audio</h2>
+            <p id="stream-info">Low latency connection active</p>
+
+            <div class="active-actions">
+                <div class="volume-container">
+                    <span class="icon">🔈</span>
+                    <input type="range" id="volume-slider" min="0" max="3" step="0.01" value="1">
+                    <span class="icon">🔊</span>
+                </div>
+                <button id="change-source" class="primary-btn" style="display: none;">Change Source</button>
+                <button id="stop-stream" class="outline-btn">Disconnect</button>
+            </div>
+        </section>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
