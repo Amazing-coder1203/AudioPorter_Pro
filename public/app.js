@@ -99,17 +99,19 @@ function initSocket(customUrl) {
     const isHttps = window.location.protocol === 'https:';
 
     if (customUrl) {
-        socketUrl = customUrl;
-        // Upgrade to wss if we're on https
-        if (isHttps && socketUrl.startsWith('ws://')) {
-            // Only upgrade if it's NOT a local IP (local IPs usually don't have SSL)
-            const isLocal = socketUrl.includes('192.168.') || socketUrl.includes('127.0.0.1') || socketUrl.includes('localhost');
-            if (!isLocal) {
-                socketUrl = socketUrl.replace('ws://', 'wss://');
-            } else {
-                console.warn("Cannot connect to local WS from HTTPS page. Please use HTTP or deploy PC side to public URL.");
-                showNotification("⚠️ Security Alert: Cannot connect to local PC from a secure Public URL. Use local address on both devices.", "error");
+        // Force upgrade to wss if we are on https, regardless of anything
+        if (isHttps) {
+            socketUrl = customUrl.replace('ws://', 'wss://');
+
+            // Check if it's a local address - strictly forbidden on HTTPS anyway
+            const isLocal = socketUrl.includes('192.168.') || socketUrl.includes('10.') || socketUrl.includes('172.') || socketUrl.includes('127.0.0.1') || socketUrl.includes('localhost');
+            if (isLocal && !socketUrl.includes(window.location.host)) {
+                console.warn("Security: Cannot connect to local IP from HTTPS page.");
+                showNotification("⚠️ Security Error: Browser blocks local connections on secure public URLs. Please connect both devices to the same public URL.", "error");
+                return; // Guard against SecurityError
             }
+        } else {
+            socketUrl = customUrl;
         }
     } else {
         const protocol = isHttps ? 'wss:' : 'ws:';
@@ -123,22 +125,29 @@ function initSocket(customUrl) {
     console.log("Attempting to connect to:", socketUrl);
     state.serverUrl = socketUrl;
 
-    // Update debug info immediately
     const serverEl = document.getElementById('debug-server');
     const statusEl = document.getElementById('debug-status');
-    if (serverEl) serverEl.textContent = socketUrl;
+
+    // Mask IP in debug info for cleaner look
+    if (serverEl) {
+        let displayUrl = socketUrl;
+        if (displayUrl.includes('192.168.') || displayUrl.includes('10.') || displayUrl.includes('172.')) {
+            displayUrl = "Local Network Server";
+        }
+        serverEl.textContent = displayUrl;
+    }
     if (statusEl) statusEl.textContent = 'Connecting...';
 
     state.socket = new WebSocket(socketUrl);
 
     state.socket.onopen = () => {
-        console.log('Connected to signaling server at:', socketUrl);
+        console.log('Connected to signaling server');
         if (statusEl) statusEl.textContent = 'Connected ✅';
 
         if (state.role === 'pc') {
             state.socket.send(JSON.stringify({
                 type: 'register_pc',
-                identity: `${state.pcName} (${window.location.hostname})`
+                identity: `${state.pcName}`
             }));
         } else if (state.role === 'phone') {
             state.socket.send(JSON.stringify({ type: 'request_discovery' }));
@@ -170,7 +179,7 @@ function initSocket(customUrl) {
             case 'server_info':
                 if (state.role === 'pc') {
                     state.pcName = data.hostname;
-                    pcIdentity.textContent = `${state.pcName} [${data.ip}]`;
+                    pcIdentity.textContent = `${state.pcName}`;
                     // Re-register with the real hostname
                     state.socket.send(JSON.stringify({
                         type: 'register_pc',

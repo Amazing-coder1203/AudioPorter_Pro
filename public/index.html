@@ -80,8 +80,9 @@
                                     </li>
                                     <li><strong>Linux:</strong> Open Terminal and type <code>ip addr show</code></li>
                                 </ul>
-                                <p class="tip">📌 Look for "IPv4 Address" or similar - it usually starts with
-                                    <code>192.168.x.x</code>
+                                <p class="tip">📌 Look for "IPv4 Address" or similar - it usually starts with numbers
+                                    like
+                                    <code>X.X.X.X</code>
                                 </p>
                             </div>
                         </div>
@@ -109,10 +110,11 @@
                                     broadcasting.</p>
                                 <p class="tip"
                                     style="background: rgba(239, 68, 68, 0.1); border-left-color: var(--error); color: white;">
-                                    ⚠️ <strong>IMPORTANT:</strong> Chrome blocks microphone access on IP addresses (like
-                                    192.168.x.x).
+                                    ⚠️ <strong>IMPORTANT:</strong> Chrome blocks microphone access on local IP
+                                    addresses.
                                     On your PC, you <strong>MUST</strong> use <code
-                                        style="color: #a5f3fc;">http://localhost:3000</code> to see the permission
+                                        style="color: #a5f3fc;">http://localhost:3000</code> or your public
+                                    <strong>HTTPS</strong> URL to see the permission
                                     popup.
                                 </p>
                             </div>
@@ -168,7 +170,8 @@
                                         type <code>ipconfig</code></li>
                                     <li><strong>Mac/Linux:</strong> Open Terminal and type <code>ifconfig</code></li>
                                 </ul>
-                                <p class="tip">📌 Look for "IPv4 Address" - it looks like <code>192.168.1.8</code></p>
+                                <p class="tip">📌 Look for "IPv4 Address" - it looks like a series of 4 numbers
+                                    separated by dots.</p>
                             </div>
                         </div>
                         <div class="instruction-card">
@@ -185,7 +188,7 @@
                             <div class="step-content">
                                 <h3>Enter PC IP Below</h3>
                                 <p>Type your PC's IP address in the box below and tap "Connect to IP".</p>
-                                <p class="tip">💡 Example: <code>192.168.1.8</code></p>
+                                <p class="tip">💡 Example: Enter your actual PC IP address shown on the PC screen.</p>
                             </div>
                         </div>
                         <div class="instruction-card">
@@ -212,7 +215,7 @@
                         style="margin-top: 1rem; display: flex; flex-direction: column; gap: 0.5rem;">
                         <label for="manual-ip-input" style="font-size: 0.9rem; opacity: 0.9;">Enter your PC's IP
                             address:</label>
-                        <input type="text" id="manual-ip-input" placeholder="e.g. 192.168.1.8"
+                        <input type="text" id="manual-ip-input" placeholder="Enter IP address"
                             style="padding: 0.8rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.1); color: white;">
                         <button id="search-ip-btn" class="primary-btn">Connect to IP</button>
                     </div>
