@@ -387,7 +387,8 @@ async function startWebRTC(isInitiator) {
 
             // Setup Gain Node
             if (!state.audioCtx) {
-                state.audioCtx = new AudioContext();
+                // Use interactive latency hint for lowest delay
+                state.audioCtx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
                 state.gainNode = state.audioCtx.createGain();
                 const source = state.audioCtx.createMediaStreamSource(event.streams[0]);
                 source.connect(state.gainNode);
@@ -402,7 +403,9 @@ async function startWebRTC(isInitiator) {
     }
 
     if (isInitiator) {
-        const offer = await state.peerConnection.createOffer();
+        let offer = await state.peerConnection.createOffer();
+        // Modify SDP for low latency
+        offer.sdp = setOpusParameters(offer.sdp);
         await state.peerConnection.setLocalDescription(offer);
         state.socket.send(JSON.stringify({
             type: 'signal',
@@ -412,12 +415,22 @@ async function startWebRTC(isInitiator) {
     }
 }
 
+// Low latency audio tweaks
+function setOpusParameters(sdp) {
+    if (sdp.indexOf('opus') === -1) return sdp;
+    // Force low latency opus parameters
+    // stereo=1; sprop-stereo=1; useinbandfec=1; minptime=10; ptime=20
+    return sdp.replace('useinbandfec=1', 'useinbandfec=1; minptime=10; ptime=20');
+}
+
 async function handleSignal(signal, fromId) {
     if (!state.peerConnection) await startWebRTC(false);
 
     if (signal.type === 'offer') {
         await state.peerConnection.setRemoteDescription(new RTCSessionDescription(signal));
-        const answer = await state.peerConnection.createAnswer();
+        let answer = await state.peerConnection.createAnswer();
+        // Modify SDP for low latency
+        answer.sdp = setOpusParameters(answer.sdp);
         await state.peerConnection.setLocalDescription(answer);
         state.socket.send(JSON.stringify({
             type: 'signal',
