@@ -114,11 +114,22 @@ function initSocket(customUrl) {
             socketUrl = customUrl;
         }
     } else {
-        const protocol = (isHttps || window.location.protocol === 'file:') ? 'wss:' : 'ws:';
-        if (window.location.protocol === 'file:') {
+        const isNative = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+        const isLocalPC = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+        if (isNative) {
+            // Always use production server for Native APKs
             socketUrl = `wss://${DEFAULT_SERVER}`;
+        } else if (window.location.protocol === 'file:') {
+            socketUrl = `wss://${DEFAULT_SERVER}`;
+        } else if (isHttps) {
+            socketUrl = `wss://${window.location.host}`;
+        } else if (isLocalPC) {
+            // Local PC development (e.g., http://localhost:3000)
+            socketUrl = `ws://${window.location.host}`;
         } else {
-            socketUrl = `${protocol}//${window.location.host}`;
+            // Default fallback
+            socketUrl = `ws://${window.location.host}`;
         }
     }
 
