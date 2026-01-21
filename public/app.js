@@ -114,7 +114,7 @@ function initSocket(customUrl) {
             socketUrl = customUrl;
         }
     } else {
-        const protocol = isHttps ? 'wss:' : 'ws:';
+        const protocol = (isHttps || window.location.protocol === 'file:') ? 'wss:' : 'ws:';
         if (window.location.protocol === 'file:') {
             socketUrl = `wss://${DEFAULT_SERVER}`;
         } else {
@@ -178,8 +178,13 @@ function initSocket(customUrl) {
                 break;
             case 'server_info':
                 if (state.role === 'pc') {
-                    state.pcName = data.hostname;
-                    pcIdentity.textContent = `${state.pcName}`;
+                    // If hostname is a Render internal ID, use a friendly name
+                    let displayName = data.hostname;
+                    if (displayName.startsWith('srv-') || displayName.length > 20) {
+                        displayName = "AudioPorter PC";
+                    }
+                    state.pcName = displayName;
+                    pcIdentity.textContent = state.pcName;
                     // Re-register with the real hostname
                     state.socket.send(JSON.stringify({
                         type: 'register_pc',
@@ -335,11 +340,12 @@ function setupPhone() {
     const savedNetworksJson = localStorage.getItem('audioporter_networks');
     state.savedNetworks = savedNetworksJson ? JSON.parse(savedNetworksJson) : [];
 
-    // On Render/HTTPS, we should always connect to the current host first
+    // On Render/HTTPS/APK, we should always connect to the public host first
     initSocket();
 
-    // If we have saved networks and we are NOT on HTTPS (local mode)
-    if (state.savedNetworks.length > 0 && window.location.protocol !== 'https:') {
+    // If we have saved networks and we are in pure LOCAL mode (HTTP + NOT APK)
+    const isPublic = window.location.protocol === 'https:' || window.location.protocol === 'file:';
+    if (state.savedNetworks.length > 0 && !isPublic) {
         connectToSavedNetworks();
     }
 }
@@ -641,6 +647,13 @@ document.getElementById('stop-stream').addEventListener('click', () => {
     stopForegroundService();
     location.reload();
 });
+document.getElementById('reset-app-btn')?.addEventListener('click', () => {
+    if (confirm("This will clear all saved PCs and settings. Continue?")) {
+        localStorage.clear();
+        location.reload();
+    }
+});
+
 document.getElementById('add-network').addEventListener('click', () => {
     // This is now "Refresh Saved"
     location.reload();
