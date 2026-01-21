@@ -116,7 +116,6 @@ function initSocket(customUrl) {
     }
 
     console.log("Attempting to connect to:", socketUrl);
-    alert("Target URL: " + socketUrl);
     state.serverUrl = socketUrl;
 
     // Update debug info immediately
@@ -237,13 +236,29 @@ function requestConnection(pcId) {
 }
 
 function handleConnectionRequest(fromId) {
-    if (confirm("A phone wants to connect to your audio. Accept?")) {
+    // Show modal instead of confirm dialog
+    const modal = document.getElementById('connection-modal');
+    const acceptBtn = document.getElementById('accept-connection');
+    const declineBtn = document.getElementById('decline-connection');
+
+    modal.classList.add('active');
+
+    // Remove old listeners
+    const newAcceptBtn = acceptBtn.cloneNode(true);
+    const newDeclineBtn = declineBtn.cloneNode(true);
+    acceptBtn.parentNode.replaceChild(newAcceptBtn, acceptBtn);
+    declineBtn.parentNode.replaceChild(newDeclineBtn, declineBtn);
+
+    // Accept connection
+    newAcceptBtn.addEventListener('click', () => {
+        modal.classList.remove('active');
         state.partnerId = fromId;
         state.socket.send(JSON.stringify({
             type: 'connection_accepted',
             targetId: fromId
         }));
         updateStatus('Phone Linked', 'connected');
+        showNotification('Phone connected successfully!', 'success');
 
         // Initialize WebRTC for PC side
         startWebRTC(false);
@@ -251,7 +266,13 @@ function handleConnectionRequest(fromId) {
         // Enable the start button and init device list
         startBtn.disabled = false;
         initDeviceList();
-    }
+    });
+
+    // Decline connection
+    newDeclineBtn.addEventListener('click', () => {
+        modal.classList.remove('active');
+        showNotification('Connection request declined', 'error');
+    });
 }
 
 // UI Navigation
@@ -275,6 +296,20 @@ async function setupPC() {
     showScreen('pc');
     pcIdentity.textContent = "Your PC";
     initSocket();
+
+    // Check if we are in a secure context (localhost or https)
+    // Browsers block microphone on http://192.168.x.x
+    const isIP = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(window.location.hostname);
+    if (!window.isSecureContext && isIP) {
+        showNotification("⚠️ Browser blocks Mic on IP. Use 'http://localhost:3000'", "error");
+        // Update instruction text to be more helpful
+        if (pcIdentity) {
+            pcIdentity.style.borderColor = "#ef4444";
+            pcIdentity.innerHTML = `🚨 Please use 'localhost' to enable Mic`;
+        }
+    }
+
+    // Trigger device list initialization which will handle permissions
     initDeviceList();
 }
 
@@ -398,6 +433,11 @@ async function handleSignal(signal, fromId) {
 
 // Capture Logic
 async function startCapture() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        showNotification("❌ Microphone access is blocked on IP addresses. Use 'http://localhost:3000' instead!", "error");
+        return;
+    }
+
     try {
         const selectedDeviceId = audioSourceSelect.value;
         state.stream = await navigator.mediaDevices.getUserMedia({
@@ -423,9 +463,20 @@ async function startCapture() {
 
         showScreen('active');
         document.getElementById('stream-status').textContent = "Broadcasting Audio";
+        showNotification("Audio streaming started!", "success");
     } catch (err) {
         console.error("Error capturing audio:", err);
-        alert("Failed to capture audio. Please check your microphone permissions.");
+
+        // Handle different error types
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+            showNotification("Microphone permission denied. Click 'Start Audio Stream' again to grant permission.", "error");
+        } else if (err.name === 'NotFoundError') {
+            showNotification("No microphone found. Please connect a microphone and try again.", "error");
+        } else if (err.name === 'NotReadableError') {
+            showNotification("Microphone is being used by another application. Please close it and try again.", "error");
+        } else {
+            showNotification("Failed to capture audio. Please check your microphone permissions.", "error");
+        }
     }
 }
 
@@ -489,19 +540,42 @@ async function changeActiveSource() {
 }
 
 async function initDeviceList() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        audioSourceSelect.innerHTML = '<option value="">Capture Not Supported</option>';
+        return;
+    }
+
     try {
+        // This getUserMedia call will trigger the browser's permission dialog
+        // like Google Meet does.
         const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+        // Once permission is granted, we stop the temporary stream
         tempStream.getTracks().forEach(t => t.stop());
+
+        // Now we can accurately list the available devices with their real names
         const devices = await navigator.mediaDevices.enumerateDevices();
         const audioDevices = devices.filter(device => device.kind === 'audioinput');
+
         audioSourceSelect.innerHTML = '';
-        audioDevices.forEach(device => {
-            const option = document.createElement('option');
-            option.value = device.deviceId;
-            option.text = device.label || 'Default';
-            audioSourceSelect.appendChild(option);
-        });
-    } catch (e) { }
+        if (audioDevices.length === 0) {
+            audioSourceSelect.innerHTML = '<option value="">No Microphones Found</option>';
+        } else {
+            audioDevices.forEach(device => {
+                const option = document.createElement('option');
+                option.value = device.deviceId;
+                option.text = device.label || 'Microphone ' + (audioSourceSelect.options.length + 1);
+                audioSourceSelect.appendChild(option);
+            });
+            showNotification("Microphone access granted!", "success");
+        }
+    } catch (err) {
+        console.warn("Permission denied or error listing devices:", err);
+        audioSourceSelect.innerHTML = '<option value="">Default Microphone (No Permission)</option>';
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+            showNotification("Microphone permission denied. Please allow access in your browser settings.", "error");
+        }
+    }
 }
 
 function updateStatus(text, ledClass) {
@@ -538,7 +612,45 @@ document.getElementById('search-ip-btn')?.addEventListener('click', () => {
     if (ip) {
         addNetwork(ip, ip);
         initSocket(`ws://${ip}:3000`);
+        showNotification(`Connecting to ${ip}...`, 'success');
     } else {
-        alert("Please enter a valid IP address");
+        showNotification("Please enter a valid IP address", "error");
     }
 });
+
+// Help section toggles
+document.getElementById('pc-help-toggle')?.addEventListener('click', function () {
+    this.classList.toggle('active');
+    const content = document.getElementById('pc-help-content');
+    content.classList.toggle('active');
+});
+
+document.getElementById('phone-help-toggle')?.addEventListener('click', function () {
+    this.classList.toggle('active');
+    const content = document.getElementById('phone-help-content');
+    content.classList.toggle('active');
+});
+
+// Auto-expand help sections on first visit (optional)
+window.addEventListener('load', () => {
+    const isFirstVisit = !localStorage.getItem('audioporter_visited');
+    if (isFirstVisit) {
+        localStorage.setItem('audioporter_visited', 'true');
+        // Auto-expand help sections for first-time users
+        setTimeout(() => {
+            document.getElementById('pc-help-toggle')?.click();
+            document.getElementById('phone-help-toggle')?.click();
+        }, 500);
+    }
+});
+
+// Notification Toast Function
+function showNotification(message, type = 'info') {
+    const toast = document.getElementById('notification-toast');
+    toast.textContent = message;
+    toast.className = 'notification-toast show ' + type;
+
+    setTimeout(() => {
+        toast.classList.remove('show');
+    }, 3000);
+}

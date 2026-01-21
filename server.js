@@ -4,6 +4,7 @@ const WebSocket = require('ws');
 const path = require('path');
 const os = require('os');
 
+const PORT = process.env.PORT || 3000;
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
@@ -158,7 +159,6 @@ function broadcastDiscovery(publicIp) {
     });
 }
 
-const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`Discovery Server running on http://${localIP}:${PORT}`);
 });

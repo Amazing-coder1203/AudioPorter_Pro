@@ -60,11 +60,72 @@
         <section id="pc-screen" class="screen">
             <button class="back-btn">&larr; Back</button>
             <div class="content">
+                <!-- PC Setup Instructions -->
+                <div class="help-section">
+                    <button class="help-toggle" id="pc-help-toggle">
+                        <span class="help-icon">💡</span>
+                        <span>Setup Instructions</span>
+                        <span class="toggle-arrow">▼</span>
+                    </button>
+                    <div class="help-content" id="pc-help-content">
+                        <div class="instruction-card">
+                            <div class="step-number">1</div>
+                            <div class="step-content">
+                                <h3>Find Your PC's IP Address</h3>
+                                <p>Your phone needs your PC's IP address to connect:</p>
+                                <ul>
+                                    <li><strong>Windows:</strong> Press <kbd>Win + R</kbd>, type <code>cmd</code>, press
+                                        Enter, then type <code>ipconfig</code></li>
+                                    <li><strong>Mac:</strong> Open Terminal and type <code>ifconfig | grep inet</code>
+                                    </li>
+                                    <li><strong>Linux:</strong> Open Terminal and type <code>ip addr show</code></li>
+                                </ul>
+                                <p class="tip">📌 Look for "IPv4 Address" or similar - it usually starts with
+                                    <code>192.168.x.x</code>
+                                </p>
+                            </div>
+                        </div>
+                        <div class="instruction-card">
+                            <div class="step-number">2</div>
+                            <div class="step-content">
+                                <h3>Share IP with Your Phone</h3>
+                                <p>Your IP address will be shown below once detected. Share this with your phone to
+                                    connect.</p>
+                            </div>
+                        </div>
+                        <div class="instruction-card">
+                            <div class="step-number">3</div>
+                            <div class="step-content">
+                                <h3>Wait for Connection</h3>
+                                <p>Open AudioPorter on your phone, enter this PC's IP address, and tap connect. You'll
+                                    see a confirmation popup here.</p>
+                            </div>
+                        </div>
+                        <div class="instruction-card">
+                            <div class="step-number">4</div>
+                            <div class="step-content">
+                                <h3>Start Streaming</h3>
+                                <p>Once connected, select your audio source and click "Start Audio Stream" to begin
+                                    broadcasting.</p>
+                                <p class="tip"
+                                    style="background: rgba(239, 68, 68, 0.1); border-left-color: var(--error); color: white;">
+                                    ⚠️ <strong>IMPORTANT:</strong> Chrome blocks microphone access on IP addresses (like
+                                    192.168.x.x).
+                                    On your PC, you <strong>MUST</strong> use <code
+                                        style="color: #a5f3fc;">http://localhost:3000</code> to see the permission
+                                    popup.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="discovery-header">
                     <div class="discovery-icon">📡</div>
                     <h2>Signal Active</h2>
                     <p>Your PC is visible on the local network as:</p>
                     <div id="pc-identity" class="identity-display">Detecting...</div>
+                    <p class="hint-small">👆 Share this IP address with your phone</p>
                 </div>
 
                 <div class="status-box">
@@ -89,6 +150,54 @@
         <section id="phone-screen" class="screen">
             <button class="back-btn">&larr; Back</button>
             <div class="content">
+                <!-- Mobile Setup Instructions -->
+                <div class="help-section">
+                    <button class="help-toggle" id="phone-help-toggle">
+                        <span class="help-icon">💡</span>
+                        <span>How to Connect</span>
+                        <span class="toggle-arrow">▼</span>
+                    </button>
+                    <div class="help-content" id="phone-help-content">
+                        <div class="instruction-card">
+                            <div class="step-number">1</div>
+                            <div class="step-content">
+                                <h3>Get Your PC's IP Address</h3>
+                                <p>On your PC, open a terminal/command prompt:</p>
+                                <ul>
+                                    <li><strong>Windows:</strong> Press <kbd>Win + R</kbd>, type <code>cmd</code>, then
+                                        type <code>ipconfig</code></li>
+                                    <li><strong>Mac/Linux:</strong> Open Terminal and type <code>ifconfig</code></li>
+                                </ul>
+                                <p class="tip">📌 Look for "IPv4 Address" - it looks like <code>192.168.1.8</code></p>
+                            </div>
+                        </div>
+                        <div class="instruction-card">
+                            <div class="step-number">2</div>
+                            <div class="step-content">
+                                <h3>Make Sure You're on the Same Wi-Fi</h3>
+                                <p>Both your phone and PC must be connected to the <strong>same Wi-Fi network</strong>.
+                                </p>
+                                <p class="tip">⚠️ This won't work if you're on mobile data or a different network!</p>
+                            </div>
+                        </div>
+                        <div class="instruction-card">
+                            <div class="step-number">3</div>
+                            <div class="step-content">
+                                <h3>Enter PC IP Below</h3>
+                                <p>Type your PC's IP address in the box below and tap "Connect to IP".</p>
+                                <p class="tip">💡 Example: <code>192.168.1.8</code></p>
+                            </div>
+                        </div>
+                        <div class="instruction-card">
+                            <div class="step-number">4</div>
+                            <div class="step-content">
+                                <h3>Start Listening</h3>
+                                <p>Once connected, tap on your PC from the list to start streaming audio!</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="discovery-container">
                     <h2>Available PCs</h2>
                     <p class="hint">Searching your local network...</p>
@@ -101,7 +210,9 @@
                     </div>
                     <div id="manual-search"
                         style="margin-top: 1rem; display: flex; flex-direction: column; gap: 0.5rem;">
-                        <input type="text" id="manual-ip-input" placeholder="Enter PC IP (e.g. 192.168.1.8)"
+                        <label for="manual-ip-input" style="font-size: 0.9rem; opacity: 0.9;">Enter your PC's IP
+                            address:</label>
+                        <input type="text" id="manual-ip-input" placeholder="e.g. 192.168.1.8"
                             style="padding: 0.8rem; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.1); color: white;">
                         <button id="search-ip-btn" class="primary-btn">Connect to IP</button>
                     </div>
@@ -154,6 +265,22 @@
             </div>
         </section>
     </main>
+
+    <!-- Connection Request Modal -->
+    <div id="connection-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-icon">📱</div>
+            <h2>Connection Request</h2>
+            <p>A phone wants to connect to your audio stream.</p>
+            <div class="modal-actions">
+                <button id="accept-connection" class="primary-btn">Accept</button>
+                <button id="decline-connection" class="outline-btn">Decline</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="notification-toast" class="notification-toast"></div>
 
     <script src="capacitor.js"></script>
     <script src="app.js"></script>
