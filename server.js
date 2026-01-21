@@ -118,6 +118,9 @@ wss.on('connection', (ws, req) => {
                         }));
                     }
                     break;
+                case 'heartbeat':
+                    // Silent keep-alive
+                    break;
             }
         } catch (e) {
             console.error(e);

@@ -155,6 +155,14 @@ function initSocket(customUrl) {
         console.log('Connected to signaling server');
         if (statusEl) statusEl.textContent = 'Connected ✅';
 
+        // Heartbeat to prevent Render hibernation (every 5 mins)
+        if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
+        state.heartbeatInterval = setInterval(() => {
+            if (state.socket && state.socket.readyState === WebSocket.OPEN) {
+                state.socket.send(JSON.stringify({ type: 'heartbeat' }));
+            }
+        }, 300000);
+
         if (state.role === 'pc') {
             state.socket.send(JSON.stringify({
                 type: 'register_pc',
@@ -175,6 +183,12 @@ function initSocket(customUrl) {
         console.log('WebSocket closed:', event.code, event.reason);
         if (statusEl) statusEl.textContent = `Closed (${event.code})`;
         updateStatus('Disconnected', 'error');
+
+        // Stop heartbeat on close
+        if (state.heartbeatInterval) {
+            clearInterval(state.heartbeatInterval);
+            state.heartbeatInterval = null;
+        }
     };
 
     state.socket.onmessage = async (event) => {
