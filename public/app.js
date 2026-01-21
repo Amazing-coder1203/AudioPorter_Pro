@@ -96,19 +96,24 @@ const DEFAULT_SERVER = 'audioporter-pro.onrender.com';
 
 function initSocket(customUrl) {
     let socketUrl;
+    const isHttps = window.location.protocol === 'https:';
+
     if (customUrl) {
-        // Force ws instead of wss for local IPs if they start with 192.168 or are localhost
-        if (customUrl.startsWith('ws') && (customUrl.includes('192.168.') || customUrl.includes('127.0.0.1') || customUrl.includes('localhost'))) {
-            socketUrl = customUrl.replace('wss://', 'ws://');
-        } else {
-            socketUrl = customUrl;
+        socketUrl = customUrl;
+        // Upgrade to wss if we're on https
+        if (isHttps && socketUrl.startsWith('ws://')) {
+            // Only upgrade if it's NOT a local IP (local IPs usually don't have SSL)
+            const isLocal = socketUrl.includes('192.168.') || socketUrl.includes('127.0.0.1') || socketUrl.includes('localhost');
+            if (!isLocal) {
+                socketUrl = socketUrl.replace('ws://', 'wss://');
+            } else {
+                console.warn("Cannot connect to local WS from HTTPS page. Please use HTTP or deploy PC side to public URL.");
+                showNotification("⚠️ Security Alert: Cannot connect to local PC from a secure Public URL. Use local address on both devices.", "error");
+            }
         }
     } else {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const protocol = isHttps ? 'wss:' : 'ws:';
         if (window.location.protocol === 'file:') {
-            // For APK: You'll still need to scan or enter IP if not using a global server
-            // But for this "No Code" version, we use the local network discovery
-            // We'll try to find the server via a broadcast-like check or manual input if it fails
             socketUrl = `wss://${DEFAULT_SERVER}`;
         } else {
             socketUrl = `${protocol}//${window.location.host}`;
@@ -321,12 +326,12 @@ function setupPhone() {
     const savedNetworksJson = localStorage.getItem('audioporter_networks');
     state.savedNetworks = savedNetworksJson ? JSON.parse(savedNetworksJson) : [];
 
-    // If we have saved networks, connect to all of them to discover PCs
-    if (state.savedNetworks.length > 0) {
+    // On Render/HTTPS, we should always connect to the current host first
+    initSocket();
+
+    // If we have saved networks and we are NOT on HTTPS (local mode)
+    if (state.savedNetworks.length > 0 && window.location.protocol !== 'https:') {
         connectToSavedNetworks();
-    } else {
-        // First time user - prompt for IP
-        promptForNewNetwork();
     }
 }
 
@@ -418,9 +423,13 @@ async function startWebRTC(isInitiator) {
 // Low latency audio tweaks
 function setOpusParameters(sdp) {
     if (sdp.indexOf('opus') === -1) return sdp;
-    // Force low latency opus parameters
-    // stereo=1; sprop-stereo=1; useinbandfec=1; minptime=10; ptime=20
-    return sdp.replace('useinbandfec=1', 'useinbandfec=1; minptime=10; ptime=20');
+    // Force specific audio parameters:
+    // 1. useinbandfec=1: Error correction
+    // 2. minptime=10: 10ms packet size (lowest possible)
+    // 3. ptime=10: Preferred 10ms packets
+    // 4. maxaveragebitrate=128000: Cap bitrate to prevent congestion lag
+    let modifiedSdp = sdp.replace('useinbandfec=1', 'useinbandfec=1; minptime=10; ptime=10; maxaveragebitrate=128000');
+    return modifiedSdp;
 }
 
 async function handleSignal(signal, fromId) {
@@ -458,15 +467,24 @@ async function startCapture() {
                 deviceId: selectedDeviceId ? { exact: selectedDeviceId } : undefined,
                 echoCancellation: false,
                 noiseSuppression: false,
-                autoGainControl: false
+                autoGainControl: false,
+                // Add explicit sample rate and channel count to avoid high-cpu resampling
+                sampleRate: 48000,
+                channelCount: 2,
+                // Request lowest possible latency from the driver
+                latency: 0
             }
         });
 
         state.stream.getTracks().forEach(track => {
+            // Signal to browser that this is high-priority content
+            if (track.contentHint) track.contentHint = 'speech';
             state.peerConnection.addTrack(track, state.stream);
         });
 
         const offer = await state.peerConnection.createOffer();
+        // Modify SDP for low latency
+        offer.sdp = setOpusParameters(offer.sdp);
         await state.peerConnection.setLocalDescription(offer);
         state.socket.send(JSON.stringify({
             type: 'signal',
