@@ -55,6 +55,8 @@ jobs:
             sed -i '/<manifest/a \    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />' "$MANIFEST"
             sed -i '/<manifest/a \    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />' "$MANIFEST"
             sed -i '/<manifest/a \    <uses-permission android:name="android.permission.WAKE_LOCK" />' "$MANIFEST"
+            sed -i '/<manifest/a \    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />' "$MANIFEST"
+            sed -i '/<manifest/a \    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />' "$MANIFEST"
             # Add Foreground Service declaration if it doesn't exist
             if ! grep -q "AndroidForegroundService" "$MANIFEST"; then
               sed -i '/<\/activity>/a \        <service android:name="io.capawesome.capacitor.plugins.androidforegroundservice.AndroidForegroundService" android:foregroundServiceType="mediaPlayback" android:exported="false" />' "$MANIFEST"

@@ -63,19 +63,56 @@ async function startForegroundService() {
             if (AndroidForegroundService) {
                 await AndroidForegroundService.start({
                     id: 12345,
-                    title: 'AudioPorter Active',
-                    body: 'Streaming high-quality audio...',
+                    title: 'AudioPorter Live',
+                    body: 'Streaming high-quality audio in background',
                     smallIcon: 'ic_launcher',
-                    importance: 3
+                    importance: 4, // IMPORTANCE_HIGH
+                    notificationChannelId: 'audioporter_v1'
                 });
                 state.isForegroundServiceActive = true;
-                console.log("Foreground service started");
+                console.log("Foreground service started with high priority");
+
+                // Initialize Media Session API
+                setupMediaSession();
             }
         } catch (e) {
             console.error("Foreground service failed", e);
         }
     }
 }
+
+function setupMediaSession() {
+    if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+            title: 'AudioPorter Stream',
+            artist: state.pcName || 'Remote PC',
+            album: 'Live Audio',
+            artwork: [
+                { src: 'favicon.ico', sizes: '96x96', type: 'image/png' }
+            ]
+        });
+
+        navigator.mediaSession.setActionHandler('play', () => {
+            if (state.audioCtx && state.audioCtx.state === 'suspended') {
+                state.audioCtx.resume();
+            }
+        });
+
+        // This tells Android that we are actively playing media
+        navigator.mediaSession.playbackState = 'playing';
+    }
+}
+
+// Keep AudioContext alive even when tab is hidden
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+        console.log("App moved to background, ensuring audio continues...");
+    } else {
+        if (state.audioCtx && state.audioCtx.state === 'suspended') {
+            state.audioCtx.resume();
+        }
+    }
+});
 
 async function stopForegroundService() {
     if (window.Capacitor && window.Capacitor.isNativePlatform() && state.isForegroundServiceActive) {
@@ -155,13 +192,13 @@ function initSocket(customUrl) {
         console.log('Connected to signaling server');
         if (statusEl) statusEl.textContent = 'Connected ✅';
 
-        // Heartbeat to prevent Render hibernation (every 5 mins)
+        // Heartbeat to prevent Render hibernation and keep mobile radio active (every 30s)
         if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
         state.heartbeatInterval = setInterval(() => {
             if (state.socket && state.socket.readyState === WebSocket.OPEN) {
                 state.socket.send(JSON.stringify({ type: 'heartbeat' }));
             }
-        }, 300000);
+        }, 30000);
 
         if (state.role === 'pc') {
             state.socket.send(JSON.stringify({
