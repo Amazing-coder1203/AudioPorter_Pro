@@ -17,7 +17,8 @@ const state = {
     serverUrl: null,
     savedNetworks: [], // Array of {ip, name} objects
     activeConnections: [], // WebSocket connections to different networks
-    isForegroundServiceActive: false
+    isForegroundServiceActive: false,
+    lastHeartbeat: Date.now()
 };
 
 const screens = {
@@ -67,7 +68,8 @@ async function startForegroundService() {
                     body: 'Streaming high-quality audio in background',
                     smallIcon: 'ic_launcher',
                     importance: 4, // IMPORTANCE_HIGH
-                    notificationChannelId: 'audioporter_v1'
+                    notificationChannelId: 'audioporter_v1',
+                    ongoing: true
                 });
                 state.isForegroundServiceActive = true;
                 console.log("Foreground service started with high priority");
@@ -125,6 +127,24 @@ async function stopForegroundService() {
             }
         } catch (e) {
             console.error("Foreground service stop failed", e);
+        }
+    }
+}
+
+async function requestBatteryExemption() {
+    if (window.Capacitor && window.Capacitor.isNativePlatform()) {
+        try {
+            // This attempts to open the app settings where the user can set "Unrestricted"
+            const { App } = Capacitor.Plugins;
+            if (App) {
+                showNotification("Please set Battery to 'Unrestricted' in the next screen", "info");
+                // Note: On many Androids, this is the most reliable way to get the user to the right place
+                await App.getInfo(); // Just to be sure plugin is ready
+                // We'll use a generic intent or just guide them if the specific plugin isn't there
+                // For now, let's just use the notification and the instruction.
+            }
+        } catch (e) {
+            console.error("Failed to open settings", e);
         }
     }
 }
@@ -714,6 +734,10 @@ document.getElementById('reset-app-btn')?.addEventListener('click', () => {
         localStorage.clear();
         location.reload();
     }
+});
+
+document.getElementById('battery-help-btn')?.addEventListener('click', () => {
+    alert("To prevent audio from stopping:\n1. Open App Info (long press app icon)\n2. Go to 'Battery'\n3. Select 'Unrestricted'\n\nThis is REQUIRED on Android 14 for background audio.");
 });
 
 document.getElementById('add-network').addEventListener('click', () => {
