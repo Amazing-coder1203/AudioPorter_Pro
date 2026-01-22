@@ -915,3 +915,13 @@ input::-webkit-inner-spin-button {
     border-color: var(--success);
     color: var(--success);
 }
+
+.download-link {
+    color: var(--primary) !important;
+    text-decoration: underline;
+    font-weight: 800;
+}
+
+.download-link:hover {
+    color: var(--secondary) !important;
+}

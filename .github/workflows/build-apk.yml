@@ -74,9 +74,17 @@ jobs:
           ./gradlew clean
           ./gradlew assembleDebug --stacktrace --info
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - name: Create Release and Upload APK
+        uses: softprops/action-gh-release@v1
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         with:
-          name: AudioPorter-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
+          tag_name: latest
+          name: Latest Build
+          files: android/app/build/outputs/apk/debug/app-debug.apk
+          body: |
+            This is the latest automated build of AudioPorter.
+            Includes background audio fixes for Android 14.
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
