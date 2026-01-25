@@ -729,10 +729,25 @@ document.getElementById('stop-stream').addEventListener('click', () => {
     stopForegroundService();
     location.reload();
 });
-document.getElementById('reset-app-btn')?.addEventListener('click', () => {
-    if (confirm("This will clear all saved PCs and settings. Continue?")) {
+document.getElementById('reset-app-btn')?.addEventListener('click', async () => {
+    if (confirm("This will clear all saved PCs, caches, and reset the app. Continue?")) {
+        // Clear LocalStorage
         localStorage.clear();
-        location.reload();
+
+        // Clear Caches
+        if ('caches' in window) {
+            const cacheNames = await caches.keys();
+            await Promise.all(cacheNames.map(name => caches.delete(name)));
+        }
+
+        // Unregister all Service Workers
+        if ('serviceWorker' in navigator) {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(registrations.map(reg => reg.unregister()));
+        }
+
+        // Force a total refresh from the server
+        window.location.href = window.location.origin + window.location.pathname + '?v=' + Date.now();
     }
 });
 

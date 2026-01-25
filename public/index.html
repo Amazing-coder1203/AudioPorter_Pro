@@ -25,9 +25,38 @@
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('sw.js')
-                    .then(reg => console.log('Service Worker registered'))
+                    .then(reg => {
+                        console.log('Service Worker registered');
+
+                        // Update detection logic
+                        reg.onupdatefound = () => {
+                            const newWorker = reg.installing;
+                            newWorker.onstatechange = () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    console.log('New content available, reloading...');
+                                    // Only reload if we actually have a controller (meaning it's an update, not first load)
+                                    window.location.reload();
+                                }
+                            };
+                        };
+                    })
                     .catch(err => console.log('Service Worker registration failed', err));
             });
+
+            // Ensure the page reloads when the service worker takes control
+            let refreshing = false;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (!refreshing) {
+                    window.location.reload();
+                    refreshing = true;
+                }
+            });
+        }
+
+        // Force reload mechanism if we detect a stale connection or manual refresh
+        if (performance.navigation.type === 1) {
+            console.log("Page reloaded, ensuring fresh connection...");
+            // The Network-First SW will handle the fresh fetch
         }
     </script>
     <div class="glass-bg"></div>
@@ -81,7 +110,8 @@
                                             href="https://github.com/Amazing-coder1203/AudioPorter_Pro/releases/latest/download/app-debug.apk"
                                             class="download-link"><strong>Download APK (Android)</strong></a></li>
                                     <li><strong>Ready to listen?</strong> Open the app/site and tap
-                                        <code>Phone / Receiver</code></li>
+                                        <code>Phone / Receiver</code>
+                                    </li>
                                 </ul>
                                 <p class="tip">📌 Note:- No further Steps Needed in this latest version
                                 </p>
