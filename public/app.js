@@ -517,16 +517,26 @@ async function startWebRTC(isInitiator) {
     }
 }
 
-// Low latency audio tweaks
+// Advanced Low Latency SDP & Logic
 function setOpusParameters(sdp) {
     if (sdp.indexOf('opus') === -1) return sdp;
-    // Force specific audio parameters:
-    // 1. useinbandfec=1: Error correction
-    // 2. minptime=10: 10ms packet size (lowest possible)
-    // 3. ptime=10: Preferred 10ms packets
-    // 4. maxaveragebitrate=128000: Cap bitrate to prevent congestion lag
-    let modifiedSdp = sdp.replace('useinbandfec=1', 'useinbandfec=1; minptime=10; ptime=10; maxaveragebitrate=128000');
-    return modifiedSdp;
+
+    let lines = sdp.split('\r\n');
+    const fmtpLineIndex = lines.findIndex(line => line.includes('a=fmtp:') && line.includes('opus'));
+
+    if (fmtpLineIndex !== -1) {
+        // ptime=10: 10ms packet size (standard is 20ms, lower is faster)
+        // minptime=10: Minimum packet size
+        // stereo=0: Mono (uses half the bandwidth, faster processing)
+        // maxaveragebitrate=48000: Optimized for voice/system audio without bloat
+        // complexity=0: Lowest CPU usage for encoding
+        // cbr=1: Constant bitrate (prevents buffer jitter)
+        // useinbandfec=1: Keep FEC for stability
+        lines[fmtpLineIndex] = lines[fmtpLineIndex].split(' ')[0] + ' ' +
+            'minptime=10;ptime=10;stereo=0;sprop-stereo=0;maxaveragebitrate=48000;complexity=0;cbr=1;useinbandfec=1';
+    }
+
+    return lines.join('\r\n');
 }
 
 async function handleSignal(signal, fromId) {
@@ -535,7 +545,6 @@ async function handleSignal(signal, fromId) {
     if (signal.type === 'offer') {
         await state.peerConnection.setRemoteDescription(new RTCSessionDescription(signal));
         let answer = await state.peerConnection.createAnswer();
-        // Modify SDP for low latency
         answer.sdp = setOpusParameters(answer.sdp);
         await state.peerConnection.setLocalDescription(answer);
         state.socket.send(JSON.stringify({
@@ -559,28 +568,40 @@ async function startCapture() {
 
     try {
         const selectedDeviceId = audioSourceSelect.value;
-        state.stream = await navigator.mediaDevices.getUserMedia({
+        const constraints = {
             audio: {
                 deviceId: selectedDeviceId ? { exact: selectedDeviceId } : undefined,
+                // Disable ALL processing to minimize latency
                 echoCancellation: false,
                 noiseSuppression: false,
                 autoGainControl: false,
-                // Add explicit sample rate and channel count to avoid high-cpu resampling
-                sampleRate: 48000,
-                channelCount: 2,
-                // Request lowest possible latency from the driver
-                latency: 0
+                highpassFilter: false,
+                typingNoiseDetection: false,
+                // Request lowest possible latency
+                latency: 0,
+                // Mono is much faster for real-time streaming
+                channelCount: 1,
+                sampleRate: 48000
             }
-        });
+        };
+
+        // Add Chrome-specific performance flags
+        if (navigator.userAgent.includes('Chrome')) {
+            constraints.audio.googEchoCancellation = false;
+            constraints.audio.googAutoGainControl = false;
+            constraints.audio.googNoiseSuppression = false;
+            constraints.audio.googHighpassFilter = false;
+        }
+
+        state.stream = await navigator.mediaDevices.getUserMedia(constraints);
 
         state.stream.getTracks().forEach(track => {
-            // Signal to browser that this is high-priority content
+            // Priority hint for the browser
             if (track.contentHint) track.contentHint = 'speech';
             state.peerConnection.addTrack(track, state.stream);
         });
 
         const offer = await state.peerConnection.createOffer();
-        // Modify SDP for low latency
         offer.sdp = setOpusParameters(offer.sdp);
         await state.peerConnection.setLocalDescription(offer);
         state.socket.send(JSON.stringify({
@@ -591,7 +612,7 @@ async function startCapture() {
 
         showScreen('active');
         document.getElementById('stream-status').textContent = "Broadcasting Audio";
-        showNotification("Audio streaming started!", "success");
+        showNotification("Audio streaming started (Ultra-Low Latency Mode)", "success");
     } catch (err) {
         console.error("Error capturing audio:", err);
 
