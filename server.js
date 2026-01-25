@@ -39,9 +39,23 @@ const localIP = getLocalIP();
 const hostname = os.hostname();
 let nextId = 1;
 
+// Keep-alive: Ping itself every 10 minutes to prevent Render hibernation
+const APP_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+if (process.env.RENDER_EXTERNAL_URL) {
+    setInterval(() => {
+        const https = require('https');
+        https.get(APP_URL, (res) => {
+            console.log(`Self-ping to ${APP_URL}: ${res.statusCode}`);
+        }).on('error', (err) => {
+            console.error('Self-ping failed:', err.message);
+        });
+    }, 600000); // 10 minutes
+}
+
 wss.on('connection', (ws, req) => {
     const publicIp = getPublicIp(req);
     const socketId = `node_${nextId++}_${Math.random().toString(36).substr(2, 5)}`;
+    ws.isAlive = true;
 
     let currentRole = null;
     let partnerId = null;
@@ -93,22 +107,8 @@ wss.on('connection', (ws, req) => {
                     }
                     break;
 
-                case 'accept_request':
-                    // PC accepted phone's request
-                    if (networkGroups.has(publicIp)) {
-                        const phoneWs = [...wss.clients].find(c => c.readyState === WebSocket.OPEN && !c.isPC); // Simple find for now
-                        // In a real app, we'd map this properly. For now, we pair the requester.
-                        // For simplicity, we'll just signal back to the specific requester ID
-                        const pcGroup = networkGroups.get(publicIp);
-                        // We need the phone's socket. Since we don't store phones in the map yet, 
-                        // we'll send a global "start_signal" to the specific target if we had its socket.
-                        // Let's optimize: Store everyone in networkGroups but only PCs are discoverable.
-                    }
-                    break;
-
                 case 'signal':
                     // Relay WebRTC signals between paired nodes
-                    // Find the partner and send
                     const targetWs = [...wss.clients].find(c => c.socketId === data.targetId);
                     if (targetWs && targetWs.readyState === WebSocket.OPEN) {
                         targetWs.send(JSON.stringify({
@@ -119,7 +119,9 @@ wss.on('connection', (ws, req) => {
                     }
                     break;
                 case 'heartbeat':
-                    // Silent keep-alive
+                    ws.isAlive = true;
+                    // Respond to heartbeat to confirm round-trip
+                    ws.send(JSON.stringify({ type: 'heartbeat_ack' }));
                     break;
             }
         } catch (e) {
@@ -135,6 +137,23 @@ wss.on('connection', (ws, req) => {
             broadcastDiscovery(publicIp);
         }
     });
+
+    ws.on('pong', () => {
+        ws.isAlive = true;
+    });
+});
+
+// Passive Ping (Server to Client) to keep proxies open
+const interval = setInterval(() => {
+    wss.clients.forEach((ws) => {
+        if (ws.isAlive === false) return ws.terminate();
+        ws.isAlive = false;
+        ws.ping();
+    });
+}, 30000);
+
+wss.on('close', () => {
+    clearInterval(interval);
 });
 
 function sendDiscoveryUpdate(ws, publicIp) {
