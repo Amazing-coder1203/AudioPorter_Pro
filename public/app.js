@@ -106,15 +106,44 @@ function setupMediaSession() {
 }
 
 // Keep AudioContext alive even when tab is hidden
+let silentStream = null;
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') {
         console.log("App moved to background, ensuring audio continues...");
+        // Ensure AudioContext is running
+        if (state.audioCtx && state.audioCtx.state === 'suspended') {
+            state.audioCtx.resume();
+        }
+
+        // Start a silent oscillator to trick the browser into keeping the process alive
+        if (state.audioCtx && !silentStream) {
+            const oscillator = state.audioCtx.createOscillator();
+            const gain = state.audioCtx.createGain();
+            gain.gain.value = 0.001; // Nearly silent
+            oscillator.connect(gain);
+            gain.connect(state.audioCtx.destination);
+            oscillator.start();
+            silentStream = oscillator;
+            console.log("Started silent keep-alive oscillator");
+        }
     } else {
         if (state.audioCtx && state.audioCtx.state === 'suspended') {
             state.audioCtx.resume();
         }
+        if (silentStream) {
+            try { silentStream.stop(); } catch (e) { }
+            silentStream = null;
+        }
     }
 });
+
+// Periodic validation of AudioContext state
+setInterval(() => {
+    if (state.audioCtx && state.audioCtx.state === 'suspended' && state.role === 'phone' && state.partnerId) {
+        console.warn("AudioContext suspended in background, attempting to resume...");
+        state.audioCtx.resume();
+    }
+}, 5000);
 
 async function stopForegroundService() {
     if (window.Capacitor && window.Capacitor.isNativePlatform() && state.isForegroundServiceActive) {
