@@ -77,5 +77,3 @@ TRY IT NOW! : https://audioporter-pro.onrender.com/
 For issues or questions, please open an issue on GitHub.
 
 ---
-
-Made with ❤️ for seamless audio streaming
