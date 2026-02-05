@@ -2,6 +2,8 @@
 
 Stream high-quality audio from your PC to your phone with low latency using WebRTC.
 
+TRY IT NOW! : https://audioporter-pro.onrender.com/
+
 ## 🚀 Features
 
 - **Real-time Audio Streaming**: Low-latency WebRTC-based audio streaming
@@ -38,72 +40,6 @@ Stream high-quality audio from your PC to your phone with low latency using WebR
 7. Once connected, tap on your PC from the list to start streaming
 8. Adjust volume using the slider
 
-## 🌐 Hosting Options (Free & No Card Required)
-
-Here are several free hosting platforms where you can deploy AudioPorter:
-
-### 1. **Render** (Recommended)
-- **URL**: https://render.com
-- **Free Tier**: Yes, with automatic sleep after inactivity
-- **Pros**: Easy deployment, supports WebSocket, auto-deploys from GitHub
-- **Cons**: Free tier sleeps after 15 minutes of inactivity
-- **Setup**:
-  1. Create account on Render
-  2. Connect your GitHub repository
-  3. Create a new "Web Service"
-  4. Set build command: `npm install`
-  5. Set start command: `node server.js`
-  6. Deploy!
-
-### 2. **Railway**
-- **URL**: https://railway.app
-- **Free Tier**: $5 free credit per month (no card required initially)
-- **Pros**: Very easy setup, great for Node.js apps, supports WebSocket
-- **Cons**: Limited free credits
-- **Setup**:
-  1. Sign up with GitHub
-  2. Click "New Project" → "Deploy from GitHub repo"
-  3. Select your AudioPorter repository
-  4. Railway auto-detects Node.js and deploys
-
-### 3. **Cyclic**
-- **URL**: https://www.cyclic.sh
-- **Free Tier**: Yes, generous free tier
-- **Pros**: Unlimited apps, serverless, auto-scaling
-- **Cons**: May have cold starts
-- **Setup**:
-  1. Sign in with GitHub
-  2. Click "Link Your Own" → Select repository
-  3. Deploy automatically
-
-### 4. **Glitch**
-- **URL**: https://glitch.com
-- **Free Tier**: Yes, unlimited projects
-- **Pros**: Live code editing, instant deployment, great for prototyping
-- **Cons**: Projects sleep after 5 minutes of inactivity
-- **Setup**:
-  1. Create account
-  2. Click "New Project" → "Import from GitHub"
-  3. Paste your repository URL
-  4. Glitch automatically runs your app
-
-### 5. **Fly.io**
-- **URL**: https://fly.io
-- **Free Tier**: Yes, generous free tier (3 shared VMs)
-- **Pros**: Global deployment, supports WebSocket, very fast
-- **Cons**: Requires CLI installation
-- **Setup**:
-  1. Install Fly CLI: `npm install -g flyctl`
-  2. Sign up: `fly auth signup`
-  3. In your project directory: `fly launch`
-  4. Deploy: `fly deploy`
-
-### 6. **Vercel** (For Static Hosting Only)
-- **URL**: https://vercel.com
-- **Free Tier**: Yes, unlimited projects
-- **Pros**: Extremely fast, great for static sites
-- **Cons**: Serverless functions have limitations for WebSocket
-- **Note**: You'll need to use an external signaling server (like the one on Render)
 
 ## 🔒 Privacy & Security
 
@@ -118,45 +54,6 @@ Here are several free hosting platforms where you can deploy AudioPorter:
 - **Backend**: Node.js with WebSocket (for signaling)
 - **Streaming**: WebRTC (peer-to-peer)
 - **Mobile**: Capacitor for Android/iOS apps
-
-## 📝 Development
-
-### Running Locally
-
-1. Clone the repository
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-3. Start the server:
-   ```bash
-   node server.js
-   ```
-4. Open `http://localhost:3000` in your browser
-
-### Building Android APK
-
-1. Install Capacitor:
-   ```bash
-   npm install @capacitor/core @capacitor/cli
-   ```
-2. Sync with Android:
-   ```bash
-   npx cap sync android
-   ```
-3. Open in Android Studio:
-   ```bash
-   npx cap open android
-   ```
-4. Build APK from Android Studio
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## 📄 License
-
-MIT License - feel free to use this project for personal or commercial purposes.
 
 ## 🆘 Troubleshooting
 
